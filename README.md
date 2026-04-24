@@ -126,6 +126,24 @@ Continuous polling (every `POLL_INTERVAL_MINUTES`):
 contest-agent schedule
 ```
 
+## Deploy (free, via GitHub Actions)
+
+This repo ships a `.github/workflows/scheduled-run.yml` workflow that runs the
+agent every 30 minutes on GitHub's free runners. No server required.
+
+1. Fork / push this repo to GitHub (done if you're reading this).
+2. In the repo go to **Settings → Secrets and variables → Actions → New repository secret** and add:
+   - `TELEGRAM_BOT_TOKEN`
+   - `TELEGRAM_CHAT_ID`
+   - `RAPIDAPI_KEY`
+3. Go to **Actions** tab → enable workflows if prompted.
+4. The workflow triggers on cron, or manually via **Run workflow** (dry-run supported).
+
+Dedup state is persisted between runs using Actions cache (`data/posted.db`).
+Free GitHub Actions minutes are unlimited on public repos and 2000/month on
+private repos — a 30-minute cron uses ~90 runs × ~1 min = 90 min/month, well
+under the cap.
+
 ## Configuration
 
 All settings live in `.env`. See `.env.example` for the full list. Highlights:
