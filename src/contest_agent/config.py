@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     ollama_base_url: str = Field(default="http://localhost:11434")
     ollama_model: str = Field(default="llama3.1:8b")
 
+    rapidapi_key: str = Field(default="")
+    rapidapi_host: str = Field(default="twitter-api45.p.rapidapi.com")
+
     twscrape_db_path: str = Field(default="./data/twscrape.db")
     nitter_instances: str = Field(
         default="https://nitter.net,https://nitter.privacydev.net,https://nitter.poast.org"

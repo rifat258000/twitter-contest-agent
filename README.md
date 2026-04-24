@@ -84,8 +84,13 @@ to regex/keyword matching (lower quality but still works).
 
 ### 3. Twitter scraping (choose one)
 
-**Option A — `twscrape` (recommended).** You need at least one real X account.
-Accounts get logged in and their session tokens are saved to SQLite.
+**Option A — RapidAPI (recommended).** Sign up free at
+<https://rapidapi.com/alexanderxbx/api/twitter-api45>, subscribe to the Basic
+(Free) plan, and copy your `X-RapidAPI-Key` into `.env → RAPIDAPI_KEY`.
+Free tier allows ~500 requests/month. Works from any IP, including cloud.
+
+**Option B — `twscrape`.** You need at least one real X account. Accounts get
+logged in and their session tokens are saved to SQLite.
 
 ```bash
 mkdir -p data
@@ -95,7 +100,10 @@ twscrape --db ./data/twscrape.db add_accounts accounts.txt username:password:ema
 twscrape --db ./data/twscrape.db login_accounts
 ```
 
-**Option B — Nitter fallback.** Nothing to configure; the agent rotates through
+**X usually blocks logins from datacenter / cloud IPs with a Cloudflare 403**;
+if you hit that, use Option A instead or run the agent from a residential IP.
+
+**Option C — Nitter fallback.** Nothing to configure; the agent rotates through
 the instances in `NITTER_INSTANCES`. Expect frequent failures.
 
 ## Run

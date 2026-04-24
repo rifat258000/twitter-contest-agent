@@ -1,8 +1,11 @@
-"""Twitter scraping with twscrape primary and Nitter HTML fallback.
+"""Twitter scraping.
 
-Both backends are fragile. twscrape requires real X accounts; Nitter depends
-on community-run instances that are often rate-limited or offline. The agent
-tries twscrape first, then falls back to Nitter.
+Backends, tried in order:
+1. RapidAPI (twitter-api45 by alexanderxbx) if RAPIDAPI_KEY is set.
+   Fastest and most reliable free/cheap option.
+2. twscrape, if accounts are registered. Requires real X accounts.
+   Frequently blocked by Cloudflare on datacenter IPs.
+3. Nitter HTML. Community-run instances; often rate-limited or offline.
 """
 
 from __future__ import annotations
@@ -21,6 +24,121 @@ from .config import Settings
 from .models import Tweet
 
 log = logging.getLogger(__name__)
+
+
+class RapidApiBackend:
+    """Fetches tweets via the twitter-api45 RapidAPI endpoint.
+
+    Requires `RAPIDAPI_KEY` in the environment. Cheapest/most reliable of the
+    three backends for this project. Uses the `/search.php` endpoint.
+    """
+
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+
+    def available(self) -> bool:
+        return bool(self.settings.rapidapi_key)
+
+    async def search(self, query: str, limit: int) -> AsyncIterator[Tweet]:
+        if not self.available():
+            return
+        base = f"https://{self.settings.rapidapi_host}/search.php"
+        headers = {
+            "x-rapidapi-key": self.settings.rapidapi_key,
+            "x-rapidapi-host": self.settings.rapidapi_host,
+            "accept": "application/json",
+        }
+        cursor: str | None = None
+        collected = 0
+        async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
+            while collected < limit:
+                params = {"query": query, "search_type": "Top"}
+                if cursor:
+                    params["cursor"] = cursor
+                try:
+                    r = await client.get(base, params=params)
+                except Exception as e:  # pragma: no cover - network
+                    log.warning("rapidapi search %r failed: %s", query, e)
+                    return
+                if r.status_code != 200:
+                    log.warning(
+                        "rapidapi %s returned %s: %s",
+                        query,
+                        r.status_code,
+                        r.text[:200],
+                    )
+                    return
+                try:
+                    data = r.json()
+                except ValueError:
+                    log.warning("rapidapi returned non-JSON for %r", query)
+                    return
+                timeline = data.get("timeline") or []
+                if not timeline:
+                    return
+                for raw in timeline:
+                    tweet = _rapidapi_to_tweet(raw)
+                    if tweet is None:
+                        continue
+                    yield tweet
+                    collected += 1
+                    if collected >= limit:
+                        return
+                cursor = data.get("next_cursor")
+                if not cursor:
+                    return
+
+
+_API45_DATE_FORMATS = (
+    "%a %b %d %H:%M:%S %z %Y",  # "Wed Apr 23 12:00:00 +0000 2026"
+    "%Y-%m-%dT%H:%M:%S.%fZ",
+    "%Y-%m-%dT%H:%M:%SZ",
+)
+
+
+def _rapidapi_to_tweet(raw: dict) -> Tweet | None:
+    tid = raw.get("tweet_id") or raw.get("id_str") or raw.get("id")
+    if not tid:
+        return None
+    author_obj = raw.get("author") or {}
+    author = author_obj.get("screen_name") or raw.get("screen_name") or ""
+    display = author_obj.get("name") or author
+    text = raw.get("text") or raw.get("full_text") or ""
+    created_raw = raw.get("created_at") or ""
+    created = datetime.now(tz=timezone.utc)
+    for fmt in _API45_DATE_FORMATS:
+        try:
+            created = datetime.strptime(created_raw, fmt)
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            break
+        except (ValueError, TypeError):
+            continue
+
+    def _int(key: str) -> int:
+        v = raw.get(key)
+        if v is None:
+            return 0
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return 0
+
+    views = _int("views")
+    return Tweet(
+        id=str(tid),
+        url=f"https://twitter.com/{author}/status/{tid}" if author else f"https://twitter.com/i/status/{tid}",
+        author=author,
+        author_display=display,
+        content=text,
+        created_at=created,
+        likes=_int("favorites"),
+        retweets=_int("retweets"),
+        replies=_int("replies"),
+        quotes=_int("quotes"),
+        views=views,
+        source="rapidapi:twitter-api45",
+    )
 
 
 class TwscrapeBackend:
@@ -184,25 +302,33 @@ def _parse_nitter_item(item, instance: str) -> Tweet | None:  # type: ignore[no-
 
 
 class Scraper:
-    """Unified scraper that tries twscrape then Nitter."""
+    """Unified scraper that tries RapidAPI → twscrape → Nitter, in order."""
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        self.rapidapi = RapidApiBackend(settings)
         self.tw = TwscrapeBackend(settings)
         self.nitter = NitterBackend(settings)
         self._tw_ready: bool | None = None
 
     async def search(self, query: str, limit: int | None = None) -> list[Tweet]:
         limit = limit or self.settings.max_tweets_per_query
-        if self._tw_ready is None:
-            self._tw_ready = await self.tw.available()
 
         tweets: list[Tweet] = []
+        if self.rapidapi.available():
+            async for t in self.rapidapi.search(query, limit):
+                tweets.append(t)
+            if tweets:
+                return tweets
+
+        if self._tw_ready is None:
+            self._tw_ready = await self.tw.available()
         if self._tw_ready:
             async for t in self.tw.search(query, limit):
                 tweets.append(t)
             if tweets:
                 return tweets
+
         async for t in self.nitter.search(query, limit):
             tweets.append(t)
         return tweets

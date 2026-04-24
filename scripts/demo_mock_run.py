@@ -16,7 +16,6 @@ from contest_agent.models import Tweet
 from contest_agent.ranking import rank
 from contest_agent.telegram import format_message
 
-
 MOCK_TWEETS: list[Tweet] = [
     Tweet(
         id="mock-meme-1",
