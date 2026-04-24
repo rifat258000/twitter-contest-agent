@@ -1,0 +1,50 @@
+[project]
+name = "twitter-contest-agent"
+version = "0.1.0"
+description = "AI agent that finds Twitter meme contests and AI events, ranks by engagement, and posts to Telegram"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "httpx>=0.27",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "python-dotenv>=1.0",
+    "apscheduler>=3.10",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.2",
+    "tenacity>=8.3",
+    "rich>=13.7",
+    "typer>=0.12",
+    "twscrape>=0.14",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+contest-agent = "contest_agent.cli:app"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = false
+ignore_missing_imports = true
