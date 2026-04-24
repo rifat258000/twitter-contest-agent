@@ -100,9 +100,11 @@ def _rapidapi_to_tweet(raw: dict) -> Tweet | None:
     tid = raw.get("tweet_id") or raw.get("id_str") or raw.get("id")
     if not tid:
         return None
-    author_obj = raw.get("author") or {}
-    author = author_obj.get("screen_name") or raw.get("screen_name") or ""
-    display = author_obj.get("name") or author
+    # twitter-api45 uses top-level `screen_name` + `user_info`.
+    # Older/alternative payloads nest under `author`.
+    user_info = raw.get("user_info") or raw.get("author") or {}
+    author = raw.get("screen_name") or user_info.get("screen_name") or ""
+    display = user_info.get("name") or author
     text = raw.get("text") or raw.get("full_text") or ""
     created_raw = raw.get("created_at") or ""
     created = datetime.now(tz=timezone.utc)
