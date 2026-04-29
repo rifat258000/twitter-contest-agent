@@ -36,6 +36,7 @@ from app.scraper import (  # noqa: E402
 )
 from app.scraper import api as twscrape_api  # noqa: E402
 from app.scraper import fetch_tweet_text, init_scraper  # noqa: E402
+from app.contests import search_contests  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -93,6 +94,21 @@ class GenerateResponse(BaseModel):
     original: str
     thread: list[str]
     variants: list[str]
+
+
+class ContestSearchRequest(BaseModel):
+    mode: str = Field(default="ai", description='"ai" | "all" | "custom"')
+    custom_queries: list[str] = Field(default_factory=list)
+    min_engagement: float = Field(default=0.0, ge=0.0)
+    limit: int = Field(default=30, ge=1, le=100)
+    recency_hours: int = Field(default=72, ge=1, le=720)
+    require_contest_keywords: bool = Field(default=True)
+
+
+class ContestSearchResponse(BaseModel):
+    count: int
+    mode: str
+    results: list[dict]
 
 
 class RegenerateResponse(BaseModel):
@@ -195,6 +211,31 @@ async def generate(payload: GenerateRequest):
         original=tweet.text,
         thread=tweet.thread,
         variants=variants,
+    )
+
+
+@app.post("/contests/search", response_model=ContestSearchResponse)
+async def contests_search(payload: ContestSearchRequest):
+    """Discover currently-running contests on X, ranked by engagement."""
+    mode = payload.mode if payload.mode in ("ai", "all", "custom") else "ai"
+    try:
+        results = await search_contests(
+            mode=mode,
+            custom_queries=payload.custom_queries or None,
+            min_engagement=payload.min_engagement,
+            limit=payload.limit,
+            recency_hours=payload.recency_hours,
+            require_contest_keywords=payload.require_contest_keywords,
+        )
+    except NoActiveAccounts as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except ScraperError as e:
+        raise HTTPException(status_code=502, detail=f"Scraper failed: {e}")
+
+    return ContestSearchResponse(
+        count=len(results),
+        mode=mode,
+        results=[r.to_dict() for r in results],
     )
 
 

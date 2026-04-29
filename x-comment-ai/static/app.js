@@ -682,4 +682,212 @@
   // Initial paint
   updateUrlCount();
   renderHistory();
+
+  // ===========================================================================
+  //  CONTESTS PANEL
+  //  Discover currently-running X contests, ranked by engagement.
+  //  Sister-feature to the reply generator: each contest card has a one-click
+  //  "Generate reply" that flips back to the Generate panel and pre-fills the URL.
+  // ===========================================================================
+  const tabGenerate = $('tab-generate');
+  const tabContests = $('tab-contests');
+  const panelGenerate = $('panel-generate');
+  const panelContests = $('panel-contests');
+
+  const contestForm    = $('contest-form');
+  const contestSubmit  = $('contest-submit');
+  const contestBtnLbl  = $('contest-btn-label');
+  const contestBtnSpin = $('contest-btn-spinner');
+  const contestError   = $('contest-error');
+  const contestResultsWrap = $('contest-results-wrap');
+  const contestList    = $('contest-list');
+  const contestEmpty   = $('contest-empty');
+  const contestCountEl = $('contest-result-count');
+  const contestPlural  = $('contest-result-plural');
+  const contestMeta    = $('contest-result-meta');
+  const contestCustomWrap = $('contest-custom-wrap');
+  const contestCustomTxt  = $('contest-custom');
+  const contestRecency = $('contest-recency');
+  const contestMinEng  = $('contest-min-eng');
+  const contestLimit   = $('contest-limit');
+  const contestStrict  = $('contest-strict');
+  const contestAutoref = $('contest-autorefresh');
+  const contestModeBtns = document.querySelectorAll('.contest-mode-btn');
+  const contestTpl = $('contest-template');
+
+  let contestMode = 'ai';
+  let contestAutoTimer = null;
+
+  // ---- Tab switching ----
+  function switchTab(target) {
+    const isContests = target === 'contests';
+    panelGenerate.classList.toggle('hidden', isContests);
+    panelContests.classList.toggle('hidden', !isContests);
+    tabGenerate.classList.toggle('tab-pill-active', !isContests);
+    tabContests.classList.toggle('tab-pill-active',  isContests);
+    tabGenerate.setAttribute('aria-selected', String(!isContests));
+    tabContests.setAttribute('aria-selected',  String( isContests));
+    // Stop any running auto-refresh when leaving the contests tab.
+    if (!isContests && contestAutoTimer) {
+      clearInterval(contestAutoTimer);
+      contestAutoTimer = null;
+      if (contestAutoref) contestAutoref.checked = false;
+    }
+  }
+  tabGenerate?.addEventListener('click', () => switchTab('generate'));
+  tabContests?.addEventListener('click', () => switchTab('contests'));
+
+  // ---- Mode toggle (AI / All / Custom) ----
+  contestModeBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      contestModeBtns.forEach((b) => b.classList.remove('contest-mode-active'));
+      btn.classList.add('contest-mode-active');
+      contestMode = btn.dataset.mode || 'ai';
+      contestCustomWrap.classList.toggle('hidden', contestMode !== 'custom');
+    });
+  });
+
+  // ---- Helpers ----
+  const fmtCount = (n) => {
+    if (!n) return '0';
+    if (n < 1000) return String(n);
+    if (n < 1_000_000) return (n / 1000).toFixed(n < 10_000 ? 1 : 0).replace(/\.0$/, '') + 'K';
+    return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+  };
+  const fmtAge = (h) => {
+    if (h < 1) return `${Math.max(1, Math.round(h * 60))}m ago`;
+    if (h < 24) return `${Math.round(h)}h ago`;
+    const d = Math.round(h / 24);
+    return `${d}d ago`;
+  };
+  const TYPE_LABEL = { ai: 'AI', video: 'Video', meme: 'Meme', art: 'Art', general: 'Contest' };
+
+  const setContestLoading = (on) => {
+    contestSubmit.disabled = on;
+    contestBtnLbl.classList.toggle('hidden', on);
+    contestBtnSpin.classList.toggle('hidden', !on);
+    contestBtnSpin.classList.toggle('inline-flex', on);
+  };
+  const showContestError = (msg) => {
+    contestError.textContent = msg;
+    contestError.classList.remove('hidden');
+  };
+  const clearContestError = () => {
+    contestError.classList.add('hidden');
+    contestError.textContent = '';
+  };
+
+  // ---- Render one contest card from a server result ----
+  function renderContestCard(c) {
+    const node = contestTpl.content.firstElementChild.cloneNode(true);
+    node.querySelector('.contest-author-name').textContent = c.author_name || c.author || 'Unknown';
+    node.querySelector('.contest-author-handle').textContent = c.author || '';
+    node.querySelector('.contest-text').textContent =
+      (c.content || '').slice(0, MAX_POST_PREVIEW) + ((c.content || '').length > MAX_POST_PREVIEW ? '…' : '');
+
+    const badge = node.querySelector('.contest-type-badge');
+    badge.textContent = TYPE_LABEL[c.contest_type] || 'Contest';
+    badge.classList.add(`contest-badge-${c.contest_type || 'general'}`);
+
+    node.querySelector('.contest-likes').textContent    = fmtCount(c.likes);
+    node.querySelector('.contest-retweets').textContent = fmtCount(c.retweets);
+    node.querySelector('.contest-replies').textContent  = fmtCount(c.replies);
+    node.querySelector('.contest-views').textContent    = fmtCount(c.views);
+    node.querySelector('.contest-age').textContent      = fmtAge(c.age_hours || 0);
+    node.querySelector('.contest-score-val').textContent = fmtCount(Math.round(c.engagement_score || 0));
+
+    if (c.deadline_hint) {
+      const dl = node.querySelector('.contest-deadline');
+      dl.classList.remove('hidden');
+      dl.classList.add('inline-flex');
+      node.querySelector('.contest-deadline-val').textContent = c.deadline_hint;
+    }
+
+    const link = node.querySelector('.contest-link');
+    link.href = c.url || `https://x.com/i/web/status/${c.id}`;
+
+    const replyBtn = node.querySelector('.contest-reply-btn');
+    replyBtn.addEventListener('click', () => {
+      // Switch to Generate tab and pre-fill URL with this contest.
+      switchTab('generate');
+      urlsInput.value = c.url || `https://x.com/i/web/status/${c.id}`;
+      updateUrlCount();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Auto-submit so the user lands directly on results.
+      setTimeout(() => form.requestSubmit(), 200);
+    });
+
+    return node;
+  }
+
+  // ---- Search ----
+  async function runContestSearch({ silent = false } = {}) {
+    if (!silent) {
+      clearContestError();
+      setContestLoading(true);
+    }
+
+    const payload = {
+      mode: contestMode,
+      custom_queries:
+        contestMode === 'custom' || contestCustomTxt.value.trim()
+          ? contestCustomTxt.value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)
+          : [],
+      min_engagement: parseFloat(contestMinEng.value || '0'),
+      limit: parseInt(contestLimit.value || '30', 10),
+      recency_hours: parseInt(contestRecency.value || '72', 10),
+      require_contest_keywords: contestStrict.value === '1',
+    };
+
+    const t0 = performance.now();
+    try {
+      const r = await fetch('/contests/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(data.detail || `Search failed (${r.status}).`);
+      }
+
+      const items = data.results || [];
+      contestCountEl.textContent = String(items.length);
+      contestPlural.textContent = items.length === 1 ? '' : 's';
+      const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+      contestMeta.textContent = `${elapsed}s · ${data.mode || contestMode} mode`;
+
+      contestList.innerHTML = '';
+      if (items.length === 0) {
+        contestResultsWrap.classList.add('hidden');
+        contestEmpty.classList.remove('hidden');
+      } else {
+        contestEmpty.classList.add('hidden');
+        contestResultsWrap.classList.remove('hidden');
+        const frag = document.createDocumentFragment();
+        items.forEach((c) => frag.appendChild(renderContestCard(c)));
+        contestList.appendChild(frag);
+      }
+    } catch (err) {
+      if (!silent) showContestError(err.message || 'Search failed.');
+    } finally {
+      if (!silent) setContestLoading(false);
+    }
+  }
+
+  contestForm?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    runContestSearch();
+  });
+
+  // ---- Auto-refresh (every 60s while toggle is on) ----
+  contestAutoref?.addEventListener('change', () => {
+    if (contestAutoTimer) {
+      clearInterval(contestAutoTimer);
+      contestAutoTimer = null;
+    }
+    if (contestAutoref.checked) {
+      contestAutoTimer = setInterval(() => runContestSearch({ silent: true }), 60_000);
+    }
+  });
 })();

@@ -112,6 +112,24 @@
       </p>
     </header>
 
+    <!-- Tab nav: Generate Replies | Find Contests -->
+    <nav class="mb-6 flex justify-center">
+      <div role="tablist" class="glass rounded-full p-1 inline-flex gap-1">
+        <button id="tab-generate" role="tab" aria-selected="true"
+          class="tab-pill tab-pill-active px-4 sm:px-5 py-2 text-[13px] font-medium rounded-full transition-all duration-200 ease-ios">
+          Generate Replies
+        </button>
+        <button id="tab-contests" role="tab" aria-selected="false"
+          class="tab-pill px-4 sm:px-5 py-2 text-[13px] font-medium rounded-full transition-all duration-200 ease-ios">
+          Find Contests
+          <span class="ml-1.5 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold tracking-wider bg-emerald-500/20 text-emerald-300 uppercase">Live</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- ==================== PANEL: GENERATE REPLIES ==================== -->
+    <div id="panel-generate">
+
     <!-- Input card -->
     <section class="glass rounded-3xl p-6 sm:p-8 shadow-card">
       <form id="generate-form" class="space-y-5" novalidate>
@@ -236,6 +254,122 @@
       <ul id="history-list" class="space-y-2"></ul>
     </section>
 
+    </div><!-- /panel-generate -->
+
+    <!-- ==================== PANEL: FIND CONTESTS ==================== -->
+    <div id="panel-contests" class="hidden">
+      <section class="glass rounded-3xl p-6 sm:p-8 shadow-card">
+        <form id="contest-form" class="space-y-5" novalidate>
+          <div class="flex items-center justify-between">
+            <label class="block text-[13px] font-medium text-slate-200">
+              Discover running contests on X
+              <span class="text-slate-500 font-normal">· ranked by engagement</span>
+            </label>
+          </div>
+
+          <!-- Mode toggle -->
+          <div class="flex items-center gap-2 p-1 rounded-2xl bg-ink-800/70 border border-white/[0.07]">
+            <button type="button" data-mode="ai"
+              class="contest-mode-btn contest-mode-active flex-1 px-3 py-2.5 text-[13px] font-medium rounded-xl transition-all duration-200 ease-ios">
+              AI contests
+            </button>
+            <button type="button" data-mode="all"
+              class="contest-mode-btn flex-1 px-3 py-2.5 text-[13px] font-medium rounded-xl transition-all duration-200 ease-ios">
+              All contests
+            </button>
+            <button type="button" data-mode="custom"
+              class="contest-mode-btn flex-1 px-3 py-2.5 text-[13px] font-medium rounded-xl transition-all duration-200 ease-ios">
+              Custom
+            </button>
+          </div>
+
+          <!-- Custom queries (shown only when mode=custom) -->
+          <div id="contest-custom-wrap" class="hidden">
+            <label for="contest-custom" class="block text-[10.5px] uppercase tracking-[0.12em] text-slate-500 mb-1.5">Custom search queries · one per line</label>
+            <textarea id="contest-custom" rows="3" autocomplete="off" spellcheck="false"
+              placeholder="crypto trading contest min_faves:50 -filter:replies&#10;NFT giveaway prize&#10;solana hackathon"
+              class="w-full rounded-2xl bg-ink-800/70 border border-white/10 px-4 py-3 text-slate-100 placeholder:text-slate-500 outline-none focus:border-accent-500/60 focus:shadow-ring transition-all duration-200 ease-ios font-mono text-[12.5px] leading-relaxed resize-y"></textarea>
+          </div>
+
+          <!-- Filters row -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div>
+              <label for="contest-recency" class="block text-[10.5px] uppercase tracking-[0.12em] text-slate-500 mb-1.5">Recency</label>
+              <select id="contest-recency" class="select-ios">
+                <option value="24">Last 24 h</option>
+                <option value="72" selected>Last 3 days</option>
+                <option value="168">Last 7 days</option>
+                <option value="720">Last 30 days</option>
+              </select>
+            </div>
+            <div>
+              <label for="contest-min-eng" class="block text-[10.5px] uppercase tracking-[0.12em] text-slate-500 mb-1.5">Min engagement</label>
+              <select id="contest-min-eng" class="select-ios">
+                <option value="0">Any</option>
+                <option value="50" selected>50+</option>
+                <option value="200">200+</option>
+                <option value="1000">1000+</option>
+              </select>
+            </div>
+            <div>
+              <label for="contest-limit" class="block text-[10.5px] uppercase tracking-[0.12em] text-slate-500 mb-1.5">Show top</label>
+              <select id="contest-limit" class="select-ios">
+                <option value="15">15</option>
+                <option value="30" selected>30</option>
+                <option value="60">60</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+            <div>
+              <label for="contest-strict" class="block text-[10.5px] uppercase tracking-[0.12em] text-slate-500 mb-1.5" title="Drop tweets that don't visibly look like contests">Filter</label>
+              <select id="contest-strict" class="select-ios">
+                <option value="1" selected>Strict</option>
+                <option value="0">Loose</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Submit + auto-refresh -->
+          <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+            <button id="contest-submit" type="submit"
+              class="btn-primary group relative flex-1 inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-[15px] font-semibold text-white">
+              <span id="contest-btn-label" class="inline-flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
+                </svg>
+                <span>Find contests</span>
+              </span>
+              <span id="contest-btn-spinner" class="hidden items-center gap-2">
+                <span class="spinner"></span>
+                Searching X…
+              </span>
+            </button>
+            <label class="inline-flex items-center gap-2.5 px-3 py-2.5 rounded-2xl bg-ink-800/70 border border-white/[0.07] text-[12.5px] text-slate-300 select-none cursor-pointer">
+              <input id="contest-autorefresh" type="checkbox" class="accent-accent-500" />
+              <span>Live refresh · 60s</span>
+            </label>
+          </div>
+        </form>
+
+        <div id="contest-error" class="hidden mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/[0.08] px-4 py-3 text-[13px] text-rose-200"></div>
+      </section>
+
+      <!-- Contest results -->
+      <section id="contest-results-wrap" class="hidden mt-8 space-y-4">
+        <div class="flex items-center justify-between px-1">
+          <h3 class="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+            <span id="contest-result-count">0</span> contest<span id="contest-result-plural">s</span> found
+          </h3>
+          <span id="contest-result-meta" class="text-[11px] tabular-nums text-slate-500"></span>
+        </div>
+        <div id="contest-list" class="space-y-3"></div>
+      </section>
+
+      <section id="contest-empty" class="hidden mt-8 glass rounded-2xl p-6 text-center text-[13px] text-slate-400">
+        No contests matched. Try widening the time window, lowering the engagement threshold, or switching to <span class="text-slate-200">All contests</span> mode.
+      </section>
+    </div><!-- /panel-contests -->
+
     <footer class="mt-16 text-center text-[11px] text-slate-600">
       <span>FastAPI · twscrape · Groq</span>
       <span class="mx-2 text-slate-700">·</span>
@@ -314,6 +448,69 @@
         </a>
 
         <span class="ml-auto text-[11px] text-slate-500">Edit before posting</span>
+      </div>
+    </article>
+  </template>
+
+  <!-- Contest card template -->
+  <template id="contest-template">
+    <article class="contest-card glass rounded-2xl p-5 sm:p-6 shadow-card hover:shadow-lift transition-all duration-300 ease-ios">
+      <header class="flex items-start justify-between gap-3 mb-3">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-accent-400 to-accent-600 ring-1 ring-white/10"></div>
+          <div class="min-w-0">
+            <p class="contest-author-name font-semibold truncate text-[14px]"></p>
+            <p class="contest-author-handle text-[12px] text-slate-500 truncate"></p>
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <span class="contest-type-badge text-[10px] font-semibold uppercase tracking-[0.12em] px-2 py-0.5 rounded-full"></span>
+        </div>
+      </header>
+
+      <p class="contest-text whitespace-pre-wrap text-slate-200 leading-relaxed text-[14px] mb-4"></p>
+
+      <!-- Engagement strip -->
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px] text-slate-400 tabular-nums border-t border-white/[0.05] pt-3">
+        <span class="flex items-center gap-1.5" title="Likes">
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          <span class="contest-likes">0</span>
+        </span>
+        <span class="flex items-center gap-1.5" title="Retweets">
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m17 1 4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="m7 23-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          <span class="contest-retweets">0</span>
+        </span>
+        <span class="flex items-center gap-1.5" title="Replies">
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span class="contest-replies">0</span>
+        </span>
+        <span class="flex items-center gap-1.5" title="Views">
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span class="contest-views">0</span>
+        </span>
+        <span class="contest-age ml-auto text-slate-500"></span>
+      </div>
+
+      <!-- Score + deadline + actions -->
+      <div class="mt-3 flex flex-wrap items-center gap-2 pt-3 border-t border-white/[0.05]">
+        <span class="contest-score inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-accent-500/15 text-accent-300" title="Engagement score">
+          <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m13 2-3 7h7l-9 13 3-9H4z"/></svg>
+          <span class="contest-score-val">0</span>
+        </span>
+        <span class="contest-deadline hidden items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-500/15 text-amber-300">
+          <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <span class="contest-deadline-val"></span>
+        </span>
+        <a class="contest-link ml-auto text-[12px] text-accent-400 hover:text-accent-300 transition-colors flex items-center gap-1"
+           href="#" target="_blank" rel="noopener noreferrer">
+          View on X
+          <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>
+        </a>
+        <button type="button"
+          class="contest-reply-btn btn-pill btn-pill-accent inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium">
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          Generate reply
+        </button>
       </div>
     </article>
   </template>

@@ -2,7 +2,7 @@
  * Strategy: app-shell precache + network-first for HTML, cache-first for static.
  * /generate, /regenerate are NEVER cached (live data).
  */
-const VERSION = 'v4-rifat';
+const VERSION = 'v5-contests';
 const SHELL_CACHE = `rifatai-shell-${VERSION}`;
 const RUNTIME_CACHE = `rifatai-runtime-${VERSION}`;
 
@@ -39,7 +39,8 @@ self.addEventListener('activate', (event) => {
 const isAPI = (url) =>
   url.pathname === '/generate' ||
   url.pathname === '/regenerate' ||
-  url.pathname === '/health';
+  url.pathname === '/health' ||
+  url.pathname.startsWith('/contests/');
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;

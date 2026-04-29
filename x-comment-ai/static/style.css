@@ -279,3 +279,47 @@ h1, h2 { letter-spacing: -0.035em; }
   transition: background 160ms var(--ease-ios), border-color 160ms var(--ease-ios), transform 160ms var(--ease-ios);
 }
 #history-list li:hover { transform: translateY(-1px); }
+
+/* ---------- Tab nav (Generate | Find Contests) ---------- */
+.tab-pill {
+  color: rgb(148, 163, 184);
+  background: transparent;
+  border: 1px solid transparent;
+}
+.tab-pill:hover { color: rgb(226, 232, 240); }
+.tab-pill-active {
+  color: white;
+  background: rgba(10, 132, 255, 0.18);
+  border-color: rgba(10, 132, 255, 0.32);
+  box-shadow: 0 4px 12px -4px rgba(10, 132, 255, 0.45);
+}
+
+/* ---------- Contest mode segmented control ---------- */
+.contest-mode-btn {
+  color: rgb(148, 163, 184);
+  background: transparent;
+  border: 1px solid transparent;
+}
+.contest-mode-btn:hover { color: rgb(226, 232, 240); background: rgba(255,255,255,0.03); }
+.contest-mode-active {
+  color: white;
+  background: linear-gradient(180deg, #1b91ff 0%, var(--ios-blue) 100%);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 4px 12px -4px rgba(10, 132, 255, 0.45);
+}
+.contest-mode-active:hover { color: white; background: linear-gradient(180deg, #2da0ff 0%, #1690ff 100%); }
+
+/* ---------- Contest type badges ---------- */
+.contest-badge-ai      { background: rgba(168, 85, 247, 0.16); color: rgb(216, 180, 254); }
+.contest-badge-video   { background: rgba(244, 63, 94,  0.16); color: rgb(254, 205, 211); }
+.contest-badge-meme    { background: rgba(245, 158, 11, 0.16); color: rgb(253, 230, 138); }
+.contest-badge-art     { background: rgba(236, 72, 153, 0.16); color: rgb(251, 207, 232); }
+.contest-badge-general { background: rgba(148, 163, 184, 0.18); color: rgb(203, 213, 225); }
+
+/* Contest card entry animation (reuse same ease as variant entry) */
+.contest-card {
+  animation: contestIn 320ms var(--ease-ios) both;
+}
+@keyframes contestIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
