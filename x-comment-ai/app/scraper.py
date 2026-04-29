@@ -191,6 +191,13 @@ async def init_scraper() -> None:
 
     await _maybe_add_account_from_env()
 
+    # Clear any stale per-queue locks from previous runs so a single transient
+    # twscrape error doesn't leave the pool unusable for 15 minutes.
+    try:
+        await api.pool.reset_locks()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("twscrape reset_locks() raised: {}", e)
+
     try:
         await api.pool.login_all()
     except Exception as e:  # noqa: BLE001
