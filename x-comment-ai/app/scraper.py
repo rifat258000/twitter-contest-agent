@@ -250,35 +250,28 @@ async def _maybe_add_account_from_env() -> None:
             "may not be marked active until ct0 is also supplied."
         )
 
-    accounts = await api.pool.accounts_info()
-    existing = next(
-        (a for a in accounts if a.get("username", "").lower() == username.lower()),
-        None,
-    )
+    # Use get_account() (returns full Account with .cookies) instead of
+    # accounts_info() — the latter only exposes username/active/last_used and
+    # has no cookies field, which would make every startup look like a cookie
+    # change and trigger a needless delete+re-add cycle.
+    existing = await api.pool.get_account(username)
 
-    if existing:
+    if existing is not None:
         # Detect when stored cookies differ from current env vars (e.g. user
         # rotated their X session, fixed a paste error, or cookies expired).
         # In that case we delete and re-add so the freshest values are used.
-        existing_cookies = existing.get("cookies") or {}
-        # `cookies` may come back as a JSON string; normalize.
-        if isinstance(existing_cookies, str):
-            try:
-                import json as _json
-                existing_cookies = _json.loads(existing_cookies)
-            except Exception:  # noqa: BLE001
-                existing_cookies = {}
+        existing_cookies = existing.cookies or {}
         cookies_changed = bool(cookies_str) and (
             existing_cookies.get("auth_token") != auth_token
-            or (ct0 and existing_cookies.get("ct0") != ct0)
+            or (bool(ct0) and existing_cookies.get("ct0") != ct0)
         )
 
-        if cookies_changed or (cookies_str and not existing.get("active")):
+        if cookies_changed or (cookies_str and not existing.active):
             logger.info(
                 "Refreshing @{} with cookies from env (changed={}, was_active={}).",
                 username,
                 cookies_changed,
-                existing.get("active"),
+                existing.active,
             )
             try:
                 await api.pool.delete_accounts(username)
@@ -296,7 +289,7 @@ async def _maybe_add_account_from_env() -> None:
             logger.info(
                 "Account @{} already in pool (active={}) — skipping add.",
                 username,
-                existing.get("active"),
+                existing.active,
             )
             return
 
