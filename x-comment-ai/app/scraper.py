@@ -12,8 +12,47 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Optional
 
+import httpx
+from fake_useragent import UserAgent
 from loguru import logger
 from twscrape import API, Tweet
+from twscrape import xclid as _twscrape_xclid
+
+
+def _patch_xclid_client_with_cookies() -> None:
+    """
+    Monkey-patch twscrape.xclid._make_client to send our X session cookies.
+
+    Cookies are needed because twscrape anonymously fetches https://x.com/tesla
+    to compute the x-client-transaction-id header. From cloud-server IPs
+    (Fly.io, AWS, GCP, etc.), Cloudflare blocks anonymous requests to x.com
+    and returns a challenge page, which then fails parsing with
+    IndexError("list index out of range") and locks the account for 15 min.
+
+    Sending an authenticated session cookie bypasses the challenge.
+    """
+    auth_token = os.getenv("X_AUTH_TOKEN", "").strip()
+    ct0 = os.getenv("X_CT0", "").strip()
+    if not auth_token:
+        return
+
+    cookies: dict[str, str] = {"auth_token": auth_token}
+    if ct0:
+        cookies["ct0"] = ct0
+
+    def _make_client_with_cookies() -> httpx.AsyncClient:
+        headers = {"user-agent": UserAgent().chrome}
+        return httpx.AsyncClient(
+            headers=headers,
+            cookies=cookies,
+            follow_redirects=True,
+        )
+
+    _twscrape_xclid._make_client = _make_client_with_cookies  # type: ignore[attr-defined]
+    logger.info("Patched twscrape.xclid._make_client to send X session cookies.")
+
+
+_patch_xclid_client_with_cookies()
 
 
 # ---------------------------------------------------------------------------
