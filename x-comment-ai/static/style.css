@@ -1,0 +1,130 @@
+/* static/style.css
+   Custom additions on top of Tailwind: animated blobs, spinner,
+   smooth reveal animation for results, and a few polish bits.
+*/
+
+:root {
+  color-scheme: dark;
+}
+
+html, body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ---------- Animated background blobs ---------- */
+.blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  opacity: 0.45;
+  will-change: transform;
+}
+
+.blob-a {
+  top: -10%;
+  left: -10%;
+  width: 420px;
+  height: 420px;
+  background: radial-gradient(circle at 30% 30%, #38bdf8, transparent 60%);
+  animation: float-a 18s ease-in-out infinite;
+}
+
+.blob-b {
+  bottom: -15%;
+  right: -10%;
+  width: 480px;
+  height: 480px;
+  background: radial-gradient(circle at 70% 70%, #d946ef, transparent 60%);
+  animation: float-b 22s ease-in-out infinite;
+}
+
+.blob-c {
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 360px;
+  height: 360px;
+  background: radial-gradient(circle, #6366f1, transparent 60%);
+  animation: float-c 26s ease-in-out infinite;
+  opacity: 0.35;
+}
+
+@keyframes float-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(40px, 30px) scale(1.08); }
+}
+@keyframes float-b {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(-50px, -30px) scale(1.1); }
+}
+@keyframes float-c {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50%      { transform: translate(-45%, -55%) scale(1.12); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blob, .blob-a, .blob-b, .blob-c { animation: none !important; }
+}
+
+/* ---------- Spinner ---------- */
+.spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---------- Results reveal ---------- */
+#results:not(.hidden) {
+  animation: fade-up 0.45s cubic-bezier(.2,.8,.2,1) both;
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.variant {
+  animation: fade-up 0.45s cubic-bezier(.2,.8,.2,1) both;
+}
+.variant:nth-child(2) { animation-delay: 0.08s; }
+.variant:nth-child(3) { animation-delay: 0.16s; }
+
+/* ---------- Char counter colour states ---------- */
+.variant-counter.warn   { color: #fbbf24; }
+.variant-counter.danger { color: #f87171; font-weight: 600; }
+
+/* ---------- Shake on error ---------- */
+.shake {
+  animation: shake 0.45s ease-in-out;
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-6px); }
+  40%      { transform: translateX(6px); }
+  60%      { transform: translateX(-4px); }
+  80%      { transform: translateX(4px); }
+}
+
+/* ---------- Custom scrollbar ---------- */
+@media (pointer: fine) {
+  ::-webkit-scrollbar       { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.16); }
+}
+
+/* ---------- contenteditable placeholder ---------- */
+.variant-text:empty::before {
+  content: attr(data-placeholder);
+  color: rgba(148, 163, 184, 0.6);
+}

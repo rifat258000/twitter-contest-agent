@@ -1,0 +1,25 @@
+# --- Web framework ---
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+
+# --- Templating & static files ---
+jinja2==3.1.4
+python-multipart==0.0.17
+
+# --- Environment / config ---
+python-dotenv==1.0.1
+pydantic==2.9.2
+pydantic-settings==2.6.1
+
+# --- LLM (Groq) ---
+groq==0.13.0
+
+# --- X (Twitter) scraping ---
+twscrape==0.17.0
+
+# --- HTTP / async helpers ---
+httpx==0.27.2
+anyio==4.6.2.post1
+
+# --- Logging / nice-to-have ---
+loguru==0.7.2

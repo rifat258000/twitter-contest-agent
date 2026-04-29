@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0f17" />
+  <title>X Comment AI — Generate engaging X replies in 1 click</title>
+
+  <!-- Tailwind via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            ink: { 950: '#070a12', 900: '#0b0f17', 800: '#121826', 700: '#1b2335' },
+            accent: { 400: '#7dd3fc', 500: '#38bdf8', 600: '#0ea5e9' },
+          },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          boxShadow: { glow: '0 0 40px -10px rgba(56, 189, 248, 0.45)' },
+        },
+      },
+    };
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/static/style.css" />
+  <script defer src="/static/app.js"></script>
+</head>
+
+<body class="min-h-screen bg-ink-950 text-slate-100 font-sans antialiased selection:bg-accent-500/30 selection:text-white">
+
+  <!-- Animated gradient blobs -->
+  <div aria-hidden="true" class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+    <div class="blob blob-a"></div>
+    <div class="blob blob-b"></div>
+    <div class="blob blob-c"></div>
+  </div>
+
+  <main class="mx-auto max-w-3xl px-4 sm:px-6 py-10 sm:py-16">
+
+    <!-- Header -->
+    <header class="text-center mb-10 sm:mb-14">
+      <div class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300 backdrop-blur">
+        <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        Powered by Groq · Llama 3.3
+      </div>
+      <h1 class="mt-5 text-4xl sm:text-5xl font-extrabold tracking-tight">
+        <span class="bg-gradient-to-r from-sky-300 via-cyan-300 to-fuchsia-300 bg-clip-text text-transparent">
+          X Comment AI
+        </span>
+      </h1>
+      <p class="mt-3 text-slate-400 text-base sm:text-lg">
+        Paste any X post link — get 3 perfect, engaging replies in seconds.
+      </p>
+    </header>
+
+    <!-- Input card -->
+    <section class="rounded-2xl border border-white/10 bg-ink-900/60 backdrop-blur-xl shadow-glow p-5 sm:p-7">
+      <form id="generate-form" class="space-y-4" novalidate>
+        <label for="url" class="block text-sm font-medium text-slate-300">X post URL</label>
+        <div class="relative">
+          <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-500">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 1 0-7.07-7.07l-1.5 1.5"/>
+              <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 1 0 7.07 7.07l1.5-1.5"/>
+            </svg>
+          </span>
+          <input
+            id="url" name="url" type="url" required autocomplete="off" spellcheck="false"
+            placeholder="https://x.com/username/status/1234567890"
+            class="w-full rounded-xl bg-ink-800/80 border border-white/10 pl-10 pr-3 py-3.5 text-slate-100 placeholder:text-slate-500 outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition"
+          />
+        </div>
+
+        <!-- Selectors row -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div>
+            <label for="lang" class="block text-xs uppercase tracking-wider text-slate-400 mb-1">Language</label>
+            <select id="lang" class="w-full rounded-xl bg-ink-800/80 border border-white/10 px-3 py-2.5 text-slate-100 outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition">
+              <option value="auto">Auto</option>
+              <option value="en">English</option>
+              <option value="bn">Bengali</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="tone" class="block text-xs uppercase tracking-wider text-slate-400 mb-1">Tone</label>
+            <select id="tone" class="w-full rounded-xl bg-ink-800/80 border border-white/10 px-3 py-2.5 text-slate-100 outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition">
+              {% for t in tones %}
+              <option value="{{ t }}" {% if t == "witty" %}selected{% endif %}>{{ t|capitalize }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-span-2 sm:col-span-1">
+            <label for="length" class="block text-xs uppercase tracking-wider text-slate-400 mb-1">Length</label>
+            <select id="length" class="w-full rounded-xl bg-ink-800/80 border border-white/10 px-3 py-2.5 text-slate-100 outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition">
+              {% for l in lengths %}
+              <option value="{{ l }}" {% if l == "medium" %}selected{% endif %}>{{ l|capitalize }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <button
+          id="submit-btn" type="submit"
+          class="group relative w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 via-cyan-500 to-fuchsia-500 px-5 py-3.5 font-semibold text-white shadow-lg shadow-sky-500/20 hover:shadow-sky-500/40 transition disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          <span id="btn-label" class="inline-flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m12 3 1.9 5.8L20 11l-5.8 1.9L12 19l-1.9-6.1L4 11l6.1-2.2z"/>
+            </svg>
+            Generate 3 Comments
+          </span>
+          <span id="btn-spinner" class="hidden items-center gap-2">
+            <span class="spinner"></span>
+            Generating…
+          </span>
+        </button>
+      </form>
+
+      <div id="error-box" class="hidden mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+        <span id="error-text"></span>
+      </div>
+    </section>
+
+    <!-- Results -->
+    <section id="results" class="hidden mt-8 space-y-6">
+
+      <!-- Original post -->
+      <article class="rounded-2xl border border-white/10 bg-ink-900/60 backdrop-blur-xl p-5 sm:p-6">
+        <header class="flex items-center justify-between gap-3 mb-3">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-sky-400 to-fuchsia-500"></div>
+            <div class="min-w-0">
+              <p id="post-author-name" class="font-semibold truncate"></p>
+              <p id="post-author-handle" class="text-sm text-slate-400 truncate"></p>
+            </div>
+          </div>
+          <a id="post-link" href="#" target="_blank" rel="noopener noreferrer"
+             class="text-xs sm:text-sm text-accent-400 hover:text-accent-500 underline-offset-4 hover:underline">
+            View on X ↗
+          </a>
+        </header>
+
+        <p id="post-text" class="whitespace-pre-wrap text-slate-200 leading-relaxed text-[15px]"></p>
+
+        <details id="thread-wrap" class="hidden mt-3 text-sm text-slate-400">
+          <summary class="cursor-pointer hover:text-slate-200">Show conversation context</summary>
+          <ul id="thread-list" class="mt-2 space-y-2 border-l border-white/10 pl-3"></ul>
+        </details>
+      </article>
+
+      <!-- Variants header -->
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-accent-400">
+          Your AI comments
+        </h2>
+        <button
+          id="regenerate-btn" type="button"
+          class="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 px-3 py-1.5 text-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>
+          </svg>
+          <span id="regen-label">Regenerate</span>
+        </button>
+      </div>
+
+      <!-- Variants grid -->
+      <div id="variants" class="grid grid-cols-1 gap-4"></div>
+
+      <!-- History -->
+      <section id="history-wrap" class="hidden mt-8">
+        <header class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Recent</h3>
+          <button id="history-clear" class="text-xs text-slate-500 hover:text-rose-300">Clear</button>
+        </header>
+        <ul id="history-list" class="space-y-2"></ul>
+      </section>
+    </section>
+
+    <footer class="mt-12 text-center text-xs text-slate-500">
+      Built with FastAPI · twscrape · Groq.
+      <span class="block sm:inline sm:ml-2">Use responsibly.</span>
+    </footer>
+  </main>
+
+  <!-- Variant template (cloned by JS) -->
+  <template id="variant-template">
+    <article class="variant rounded-2xl border border-accent-500/30 bg-gradient-to-br from-ink-900/80 to-ink-800/80 backdrop-blur-xl p-5 sm:p-6 shadow-glow">
+      <header class="flex items-center justify-between mb-3">
+        <span class="variant-badge text-xs font-semibold uppercase tracking-wider text-accent-400">Variant</span>
+        <span class="variant-counter text-xs tabular-nums text-slate-400">0 / 280</span>
+      </header>
+
+      <div class="variant-text whitespace-pre-wrap text-slate-100 text-[17px] leading-relaxed outline-none focus:ring-2 focus:ring-accent-500/40 rounded-md p-1 -m-1"
+           contenteditable="true" spellcheck="true"></div>
+
+      <div class="mt-4 flex flex-wrap items-center gap-2">
+        <button class="copy-btn inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 px-3 py-1.5 text-sm transition">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          <span class="copy-label">Copy</span>
+        </button>
+
+        <a class="reply-btn inline-flex items-center gap-2 rounded-lg border border-accent-500/30 bg-accent-500/10 hover:bg-accent-500/20 px-3 py-1.5 text-sm text-accent-400 transition"
+           href="#" target="_blank" rel="noopener noreferrer">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+          </svg>
+          Reply on X
+        </a>
+
+        <span class="ml-auto text-xs text-slate-500">Tip: edit before posting</span>
+      </div>
+    </article>
+  </template>
+
+  <!-- Toast -->
+  <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 hidden rounded-full bg-emerald-500/90 px-4 py-2 text-sm font-medium text-white shadow-lg">
+    Copied to clipboard
+  </div>
+</body>
+</html>
