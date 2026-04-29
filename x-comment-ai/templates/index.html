@@ -174,15 +174,15 @@
 
       <!-- Variants grid -->
       <div id="variants" class="grid grid-cols-1 gap-4"></div>
+    </section>
 
-      <!-- History -->
-      <section id="history-wrap" class="hidden mt-8">
-        <header class="flex items-center justify-between mb-3">
-          <h3 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Recent</h3>
-          <button id="history-clear" class="text-xs text-slate-500 hover:text-rose-300">Clear</button>
-        </header>
-        <ul id="history-list" class="space-y-2"></ul>
-      </section>
+    <!-- History (sibling of #results so it's reachable on first page load) -->
+    <section id="history-wrap" class="hidden mt-8">
+      <header class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Recent</h3>
+        <button id="history-clear" class="text-xs text-slate-500 hover:text-rose-300">Clear</button>
+      </header>
+      <ul id="history-list" class="space-y-2"></ul>
     </section>
 
     <footer class="mt-12 text-center text-xs text-slate-500">
