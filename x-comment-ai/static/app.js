@@ -2,7 +2,7 @@
 // Vanilla JS controller for X Comment AI (bulk-enabled).
 //
 // Features:
-// - Bulk URL input (one per line, up to 200; soft warn above 100)
+// - Bulk URL input (one per line, no hard cap; warn above 100, confirm above 500)
 // - Concurrency-capped parallel /generate calls (cap = 5)
 // - Per-post card with author + clickable "View on X" + variants
 // - Per-post Regenerate (calls /regenerate, no re-scrape)
@@ -59,8 +59,10 @@
   const HISTORY_LIMIT = 10;
   const X_LIMIT = 280;
   const X_WARN  = 240;
-  const MAX_URLS = 200;
+  // No hard cap on URLs — the practical limit is Groq's daily token quota
+  // and X's per-account rate limit, not the frontend.
   const SOFT_WARN_URLS = 100;
+  const HARD_WARN_URLS = 500;
   // 3 URLs * 3 variants = 9 in-flight Groq calls peak, well under the
   // free-tier 30 RPM ceiling. Keeps bulk batches reliable.
   const CONCURRENCY = 3;
@@ -141,8 +143,8 @@
   const updateUrlCount = () => {
     const urls = parseUrls(urlsInput.value);
     let label = `${urls.length} URL${urls.length === 1 ? '' : 's'}`;
-    if (urls.length > MAX_URLS) {
-      label += ` — too many (max ${MAX_URLS})`;
+    if (urls.length > HARD_WARN_URLS) {
+      label += ' — may hit Groq daily quota / X rate limits';
       urlCount.classList.add('text-rose-400');
       urlCount.classList.remove('text-amber-300', 'text-slate-500');
     } else if (urls.length > SOFT_WARN_URLS) {
@@ -542,9 +544,15 @@
       showError('Paste at least one X post URL (one per line). URLs must look like https://x.com/<user>/status/<id>.');
       return;
     }
-    if (urls.length > MAX_URLS) {
-      showError(`Too many URLs (${urls.length}). Max ${MAX_URLS} per batch.`);
-      return;
+    if (urls.length > HARD_WARN_URLS) {
+      const proceed = window.confirm(
+        `${urls.length} URLs is a very large batch. This may exhaust Groq's `
+        + `free-tier daily quota and trigger X rate limits on your scraper `
+        + `account, which can leave many cards as failed.\n\n`
+        + `Estimated time: ~${Math.ceil((urls.length * 4) / 60)} min.\n\n`
+        + `Continue?`
+      );
+      if (!proceed) return;
     }
 
     setLoading(true);
