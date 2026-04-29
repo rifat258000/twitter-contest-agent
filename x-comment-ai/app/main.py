@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, HTTPException, Request  # noqa: E402
-from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from fastapi.templating import Jinja2Templates  # noqa: E402
 from loguru import logger  # noqa: E402
@@ -27,6 +27,7 @@ from app.groq_client import (  # noqa: E402
     GroqError,
     GroqNotConfigured,
     generate_comments,
+    generate_comments_stream,
 )
 from app.scraper import (  # noqa: E402
     InvalidTweetURL,
@@ -259,6 +260,90 @@ async def contests_search(payload: ContestSearchRequest):
         count=len(results),
         mode=mode,
         results=[r.to_dict() for r in results],
+    )
+
+
+@app.post("/generate/stream")
+async def generate_stream(payload: GenerateRequest):
+    """SSE: scrape the tweet, then stream Groq variant tokens as they arrive.
+
+    Event types (each line: `data: <json>\\n\\n`):
+      meta         { url, tweet_id, author, author_name, original, thread }
+      delta        { idx, delta }
+      variant_done { idx, text }
+      variant_error{ idx, error }
+      done         { variants: [...] }
+      error        { error }   # terminal — only when scrape fails before stream
+    """
+    import asyncio as _asyncio
+    import json as _json
+
+    async def event_stream():
+        def sse(event_type: str, payload: dict) -> bytes:
+            return f"event: {event_type}\ndata: {_json.dumps(payload, ensure_ascii=False)}\n\n".encode("utf-8")
+
+        # 1) Scrape — this is fast (twscrape) but failure should terminate stream early.
+        try:
+            tweet = await fetch_tweet_text(payload.url, include_thread=True)
+        except InvalidTweetURL as e:
+            yield sse("error", {"error": str(e), "code": 400})
+            return
+        except TweetNotFound as e:
+            yield sse("error", {"error": str(e), "code": 404})
+            return
+        except NoActiveAccounts as e:
+            yield sse("error", {"error": str(e), "code": 503})
+            return
+        except ScraperError as e:
+            yield sse("error", {"error": f"Scraper failed: {e}", "code": 502})
+            return
+
+        yield sse("meta", {
+            "url": tweet.url,
+            "tweet_id": str(tweet.id),
+            "author": tweet.author,
+            "author_name": tweet.author_name,
+            "original": tweet.text,
+            "thread": list(tweet.thread or []),
+        })
+
+        # 2) Stream variants
+        try:
+            async for ev in generate_comments_stream(
+                post_text=tweet.text,
+                thread=tweet.thread,
+                lang=payload.lang,
+                tone=payload.tone or "witty",
+                length=payload.length or "medium",
+                n=payload.n,
+            ):
+                kind, idx, payload_v = ev
+                if kind == "delta":
+                    yield sse("delta", {"idx": idx, "delta": payload_v})
+                elif kind == "done":
+                    yield sse("variant_done", {"idx": idx, "text": payload_v})
+                elif kind == "error":
+                    yield sse("variant_error", {"idx": idx, "error": payload_v})
+                elif kind == "all_done":
+                    yield sse("done", {"variants": payload_v})
+                # Cooperatively yield to the event loop so chunks flush promptly
+                await _asyncio.sleep(0)
+        except GroqNotConfigured as e:
+            yield sse("error", {"error": str(e), "code": 503})
+        except GroqError as e:
+            yield sse("error", {"error": str(e), "code": 502})
+        except Exception as e:  # noqa: BLE001
+            logger.exception("generate_stream crashed")
+            yield sse("error", {"error": f"Streaming failed: {e}", "code": 500})
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",  # disable proxy buffering (nginx, fly edge)
+            "Connection": "keep-alive",
+        },
     )
 
 

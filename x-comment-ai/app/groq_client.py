@@ -297,6 +297,166 @@ async def _one_call(
     return cleaned
 
 
+async def _one_call_stream(
+    post_text: str,
+    thread: Optional[Iterable[str]],
+    lang: str,
+    tone: str,
+    length: str,
+    temperature: float,
+):
+    """Async generator yielding raw token deltas + a final cleaned string.
+
+    Yields:
+        ("delta", str)  — every token chunk as it arrives from Groq
+        ("done",  str)  — final cleaned reply (after _clean_reply truncation)
+        ("error", str)  — terminal error string; no more deltas
+
+    Mirrors `_one_call` retry logic for rate limits, but only the *initial*
+    request creation can be retried — once a stream is open, mid-stream
+    failures are fatal for that variant.
+    """
+    client = _get_client()
+    user_prompt = _build_user_prompt(
+        post_text, thread=thread, lang=lang, tone=tone, length=length
+    )
+    max_chars = LENGTHS.get(length, LENGTHS["medium"])[0]
+
+    max_attempts = 4
+    last_429: Optional[RateLimitError] = None
+    stream = None
+    for attempt in range(max_attempts):
+        try:
+            stream = await client.chat.completions.create(
+                model=GROQ_MODEL,
+                temperature=temperature,
+                max_tokens=GROQ_MAX_TOKENS,
+                top_p=0.95,
+                stream=True,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+            )
+            break
+        except RateLimitError as e:
+            last_429 = e
+            wait = _retry_after_seconds(e, attempt)
+            if attempt + 1 >= max_attempts:
+                yield ("error", f"Groq rate limit hit (waited up to {wait:.1f}s). Try again in a minute.")
+                return
+            await asyncio.sleep(wait)
+        except APIError as e:
+            yield ("error", f"Groq API error: {e}")
+            return
+        except Exception as e:  # noqa: BLE001
+            yield ("error", f"Unexpected Groq failure: {e}")
+            return
+
+    if stream is None:
+        yield ("error", f"Groq rate limit hit and retries exhausted (last error: {last_429}).")
+        return
+
+    raw_parts: list[str] = []
+    try:
+        async for chunk in stream:
+            try:
+                delta = chunk.choices[0].delta.content
+            except Exception:  # noqa: BLE001
+                delta = None
+            if not delta:
+                continue
+            raw_parts.append(delta)
+            yield ("delta", delta)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Groq stream interrupted: {}", e)
+        yield ("error", f"Stream interrupted: {e}")
+        return
+
+    raw = "".join(raw_parts)
+    cleaned = _clean_reply(raw, max_chars=max_chars)
+    if not cleaned:
+        yield ("error", "Empty reply after cleanup.")
+        return
+    yield ("done", cleaned)
+
+
+async def generate_comments_stream(
+    post_text: str,
+    thread: Optional[Iterable[str]] = None,
+    lang: Optional[str] = None,
+    tone: str = "witty",
+    length: str = "medium",
+    n: int = 3,
+    base_temperature: Optional[float] = None,
+):
+    """Run N parallel streaming Groq calls, multiplexing token events.
+
+    Yields tuples:
+        ("delta", idx, str)
+        ("done",  idx, final_cleaned_text)
+        ("error", idx, error_string)
+        ("all_done", final_variants_list)
+    """
+    if n < 1:
+        n = 1
+    if n > 5:
+        n = 5
+
+    if not post_text or not post_text.strip():
+        raise GroqError("Cannot generate a comment for empty post text.")
+
+    lang = (lang or DEFAULT_REPLY_LANG or "auto").lower()
+    tone = (tone or "witty").lower()
+    length = (length or "medium").lower()
+    base_temp = GROQ_TEMPERATURE if base_temperature is None else float(base_temperature)
+
+    spread = [-0.10, 0.05, 0.20, -0.20, 0.30][:n]
+    temps = [max(0.1, min(1.3, base_temp + d)) for d in spread]
+
+    queue: asyncio.Queue = asyncio.Queue()
+    finals: list[Optional[str]] = [None] * n
+    errors: list[Optional[str]] = [None] * n
+
+    async def runner(idx: int, temp: float) -> None:
+        try:
+            async for ev in _one_call_stream(post_text, thread, lang, tone, length, temp):
+                kind, payload = ev
+                await queue.put((kind, idx, payload))
+                if kind == "done":
+                    finals[idx] = payload
+                elif kind == "error":
+                    errors[idx] = payload
+        except Exception as e:  # noqa: BLE001
+            errors[idx] = str(e)
+            await queue.put(("error", idx, str(e)))
+
+    tasks = [asyncio.create_task(runner(i, t)) for i, t in enumerate(temps)]
+
+    pending = set(range(n))
+    while pending:
+        kind, idx, payload = await queue.get()
+        yield (kind, idx, payload)
+        if kind in ("done", "error"):
+            pending.discard(idx)
+
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+    # De-dup successful finals while preserving order.
+    out: list[str] = []
+    seen: set[str] = set()
+    for f in finals:
+        if not f:
+            continue
+        key = f.strip().lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(f)
+
+    yield ("all_done", -1, out)
+
+
 async def generate_comment(
     post_text: str,
     thread: Optional[Iterable[str]] = None,

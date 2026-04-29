@@ -439,6 +439,109 @@
       regenBtn.classList.remove('hidden');
     };
 
+    // ---- Streaming-mode helpers (used by /generate/stream consumer) ----
+    // After applyMeta, we still hold the N skeleton variant placeholders.
+    // Each `streamDelta(idx, txt)` swaps the i-th skeleton for a live
+    // container the first time, then appends text. `streamVariantDone`
+    // upgrades it to a full renderVariant card with copy/reply controls.
+    const liveSlots = new Map();  // idx → { container, textEl }
+
+    const ensureLiveSlot = (idx) => {
+      let slot = liveSlots.get(idx);
+      if (slot) return slot;
+      const container = document.createElement('article');
+      container.className = 'variant rounded-2xl border border-white/[0.07] bg-ink-800/60 backdrop-blur-xl p-5 sm:p-6 shadow-soft';
+      container.innerHTML = `
+        <header class="flex items-center justify-between mb-3">
+          <span class="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-accent-400">Variant ${idx + 1}</span>
+          <span class="text-[11px] tabular-nums text-slate-500 inline-flex items-center gap-1.5">
+            <span class="spinner" style="width:10px;height:10px;border-width:1.5px"></span>
+            <span class="streaming-counter">0 / ${X_LIMIT}</span>
+          </span>
+        </header>
+        <div class="variant-text whitespace-pre-wrap text-slate-100 text-[17px] leading-relaxed p-2 -mx-1 caret-accent-400"></div>
+        <div class="streaming-cursor inline-block w-[2px] h-[18px] -ml-[2px] align-text-bottom bg-accent-400/80 animate-pulse"></div>
+      `;
+      const textEl = container.querySelector('.variant-text');
+      const counter = container.querySelector('.streaming-counter');
+      // Replace the i-th skeleton (or append if none).
+      const skeletons = variantsEl.querySelectorAll('.skeleton-variant');
+      if (skeletons[idx]) {
+        skeletons[idx].replaceWith(container);
+      } else {
+        variantsEl.appendChild(container);
+      }
+      slot = { container, textEl, counter, accumulated: '' };
+      liveSlots.set(idx, slot);
+      return slot;
+    };
+
+    const applyMeta = (meta) => {
+      // Treat meta the same as renderResult, but with empty variants — the
+      // skeleton variant placeholders stay in place until streamDelta swaps
+      // them.
+      postData = {
+        url: meta.url || url,
+        tweet_id: meta.tweet_id,
+        author: meta.author,
+        author_name: meta.author_name,
+        original: meta.original,
+        thread: meta.thread || [],
+        variants: [],
+      };
+      authorName.textContent = meta.author_name || meta.author || '';
+      authorHnd.textContent  = meta.author || '';
+      linkEl.href            = meta.url || url;
+      textEl.textContent     = truncate(meta.original || '', MAX_POST_PREVIEW);
+    };
+
+    const streamDelta = (idx, delta) => {
+      const slot = ensureLiveSlot(idx);
+      slot.accumulated += delta;
+      slot.textEl.textContent = slot.accumulated;
+      const len = slot.accumulated.length;
+      if (slot.counter) slot.counter.textContent = `${len} / ${X_LIMIT}`;
+    };
+
+    const streamVariantDone = (idx, finalText) => {
+      const slot = liveSlots.get(idx);
+      const fullCard = renderVariant(finalText, idx, getPostMeta);
+      if (slot && slot.container.parentNode) {
+        slot.container.replaceWith(fullCard);
+      } else {
+        // No prior delta — just replace skeleton[idx] or append.
+        const skeletons = variantsEl.querySelectorAll('.skeleton-variant');
+        if (skeletons[idx]) skeletons[idx].replaceWith(fullCard);
+        else variantsEl.appendChild(fullCard);
+      }
+      liveSlots.delete(idx);
+      if (postData) postData.variants[idx] = finalText;
+    };
+
+    const streamVariantError = (idx, errMsg) => {
+      const slot = liveSlots.get(idx);
+      const errCard = document.createElement('article');
+      errCard.className = 'variant rounded-2xl border border-rose-500/25 bg-rose-500/[0.06] p-4 text-[13px] text-rose-200';
+      errCard.textContent = `Variant ${idx + 1} failed: ${errMsg}`;
+      if (slot && slot.container.parentNode) {
+        slot.container.replaceWith(errCard);
+      } else {
+        const skeletons = variantsEl.querySelectorAll('.skeleton-variant');
+        if (skeletons[idx]) skeletons[idx].replaceWith(errCard);
+        else variantsEl.appendChild(errCard);
+      }
+      liveSlots.delete(idx);
+    };
+
+    const streamFinish = (variants) => {
+      // Clean up any leftover skeletons (shouldn't happen, but be safe)
+      variantsEl.querySelectorAll('.skeleton-variant').forEach((el) => el.remove());
+      regenBtn.classList.remove('hidden');
+      if (postData && Array.isArray(variants) && variants.length) {
+        postData.variants = variants;
+      }
+    };
+
     regenBtn.addEventListener('click', async () => {
       if (!postData) return;
       regenBtn.disabled = true;
@@ -467,7 +570,19 @@
       }
     });
 
-    return { node, setStatus, renderResult, setSkeleton, getData: () => postData, url };
+    return {
+      node,
+      setStatus,
+      renderResult,
+      setSkeleton,
+      applyMeta,
+      streamDelta,
+      streamVariantDone,
+      streamVariantError,
+      streamFinish,
+      getData: () => postData,
+      url,
+    };
   };
 
   // ---------- failed-links summary ----------
@@ -639,6 +754,74 @@
     return data;
   };
 
+  // ---------- streaming ----------
+  /**
+   * Consume a Server-Sent-Events stream from /generate/stream and dispatch
+   * each event to the right card hook. Resolves when the stream ends; rejects
+   * on a terminal error event.
+   *
+   * Hooks called on `card`:
+   *   meta          -> applyMeta
+   *   delta         -> streamDelta
+   *   variant_done  -> streamVariantDone
+   *   variant_error -> streamVariantError
+   *   done          -> streamFinish
+   */
+  const streamGenerate = async (card, body) => {
+    const resp = await fetch('/generate/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok || !resp.body) {
+      // Fallback: server didn't return a stream (proxy stripped it, etc.)
+      const text = await resp.text().catch(() => '');
+      throw new Error(text || `Request failed (${resp.status}).`);
+    }
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder('utf-8');
+    let buf = '';
+    let finalVariants = null;
+    let terminalError = null;
+
+    const handle = (event, json) => {
+      let data;
+      try { data = JSON.parse(json); } catch { return; }
+      switch (event) {
+        case 'meta':          card.applyMeta(data); break;
+        case 'delta':         card.streamDelta(data.idx, data.delta); break;
+        case 'variant_done':  card.streamVariantDone(data.idx, data.text); break;
+        case 'variant_error': card.streamVariantError(data.idx, data.error); break;
+        case 'done':          finalVariants = data.variants || []; break;
+        case 'error':         terminalError = data.error || 'Streaming failed.'; break;
+      }
+    };
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+
+      // SSE events are separated by a blank line. Each event consists of
+      // optional `event: type\n` followed by `data: payload\n` lines.
+      let sep;
+      while ((sep = buf.indexOf('\n\n')) >= 0) {
+        const block = buf.slice(0, sep);
+        buf = buf.slice(sep + 2);
+        let evType = 'message';
+        let dataLines = [];
+        for (const line of block.split('\n')) {
+          if (line.startsWith('event:')) evType = line.slice(6).trim();
+          else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+        }
+        if (dataLines.length) handle(evType, dataLines.join('\n'));
+      }
+    }
+
+    if (terminalError) throw new Error(terminalError);
+    return { variants: finalVariants || [] };
+  };
+
   // ---------- bulk processing ----------
   /**
    * Process URLs with a fixed concurrency cap.
@@ -676,17 +859,18 @@
       card.setStatus('loading', 'Fetching tweet + generating…');
       card.setSkeleton(true, n);
       try {
-        const data = await callJSON('/generate', { url, lang, tone, length, n });
-        card.renderResult(data);
-        card.setStatus('done', `Done · ${(data.variants || []).length} variants`);
+        const stream = await streamGenerate(card, { url, lang, tone, length, n });
+        const data = card.getData() || {};
+        card.streamFinish(stream.variants);
+        card.setStatus('done', `Done · ${(stream.variants || []).length} variants`);
         pushHistory({
           tweet_id: data.tweet_id,
-          url: data.url,
+          url: data.url || url,
           author: data.author,
           author_name: data.author_name,
           original: data.original,
           thread: data.thread || [],
-          variants: data.variants || [],
+          variants: stream.variants || data.variants || [],
           at: Date.now(),
         });
         okCount++;
