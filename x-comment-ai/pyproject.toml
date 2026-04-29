@@ -15,7 +15,7 @@ license = { text = "MIT" }
 keywords = ["x", "twitter", "groq", "llama", "fastapi", "twscrape"]
 
 dependencies = [
-    "fastapi==0.115.5",
+    "fastapi[standard]==0.115.5",
     "uvicorn[standard]==0.32.1",
     "jinja2==3.1.4",
     "python-multipart==0.0.17",
@@ -24,6 +24,7 @@ dependencies = [
     "pydantic-settings==2.6.1",
     "groq==0.13.0",
     "twscrape==0.17.0",
+    "fake-useragent>=1.4",
     "httpx==0.27.2",
     "anyio==4.6.2.post1",
     "loguru==0.7.2",

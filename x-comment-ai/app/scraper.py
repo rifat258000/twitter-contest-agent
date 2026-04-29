@@ -52,7 +52,75 @@ def _patch_xclid_client_with_cookies() -> None:
     logger.info("Patched twscrape.xclid._make_client to send X session cookies.")
 
 
+def _patch_xclid_get_scripts_list() -> None:
+    """
+    Replace twscrape.xclid.get_scripts_list with a parser that understands
+    X.com's current webpack chunk format.
+
+    Old format (what upstream twscrape parses):
+        e=>e+"."+{chunk_id: "hash", ...}[e]+"a.js"
+    Current format (since late 2025):
+        ({chunk_id: "module_name", ...}[e] || e) + "." + ({chunk_id: "hash", ...})[e] + "a.js"
+
+    Without this patch, upstream's `text.split('e=>e+"."+')[1]` raises
+    IndexError and twscrape locks the account for 15 minutes (issue #287).
+    """
+    import re as _re
+
+    def _walk_back_paren(s: str, start: int) -> int:
+        depth = 1
+        k = start - 1
+        while k >= 0 and depth > 0:
+            c = s[k]
+            if c == ")":
+                depth += 1
+            elif c == "(":
+                depth -= 1
+            k -= 1
+        return k + 1
+
+    def _walk_back_brace(s: str, start: int) -> int:
+        depth = 1
+        k = start - 1
+        while k >= 0 and depth > 0:
+            c = s[k]
+            if c == "}":
+                depth += 1
+            elif c == "{":
+                depth -= 1
+            k -= 1
+        return k + 1
+
+    def _parse_kvs(inner: str) -> dict[int, str]:
+        return {int(m.group(1)): m.group(2) for m in _re.finditer(r'(\d+):"([^"]+)"', inner)}
+
+    def patched_get_scripts_list(text: str):
+        i = text.find('[e]+"a.js"')
+        if i == -1 or text[i - 1] != ")":
+            return  # nothing to yield; parse_anim_idx will raise its own error
+
+        hash_close = i - 1
+        hash_open = _walk_back_paren(text, hash_close)
+        hash_inner = text[hash_open + 1: hash_close]
+        hashes = _parse_kvs(hash_inner)
+
+        n = text.rfind('})[e]||e)', 0, hash_open)
+        if n == -1:
+            return
+        name_open = _walk_back_brace(text, n)
+        name_inner = text[name_open + 1: n]
+        names = _parse_kvs(name_inner)
+
+        for chunk_id, hash_val in hashes.items():
+            name = names.get(chunk_id, str(chunk_id))
+            yield _twscrape_xclid.script_url(name, f"{hash_val}a")
+
+    _twscrape_xclid.get_scripts_list = patched_get_scripts_list  # type: ignore[attr-defined]
+    logger.info("Patched twscrape.xclid.get_scripts_list for current X.com chunk format.")
+
+
 _patch_xclid_client_with_cookies()
+_patch_xclid_get_scripts_list()
 
 
 # ---------------------------------------------------------------------------
