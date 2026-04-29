@@ -33,6 +33,7 @@ from app.scraper import (  # noqa: E402
     InvalidTweetURL,
     NoActiveAccounts,
     ScraperError,
+    ScraperRateLimited,
     TweetNotFound,
 )
 from app.scraper import api as twscrape_api  # noqa: E402
@@ -209,6 +210,8 @@ async def generate(payload: GenerateRequest):
         raise HTTPException(status_code=404, detail=str(e))
     except NoActiveAccounts as e:
         raise HTTPException(status_code=503, detail=str(e))
+    except ScraperRateLimited as e:
+        raise HTTPException(status_code=429, detail=str(e))
     except ScraperError as e:
         raise HTTPException(status_code=502, detail=f"Scraper failed: {e}")
 
@@ -253,6 +256,8 @@ async def contests_search(payload: ContestSearchRequest):
         )
     except NoActiveAccounts as e:
         raise HTTPException(status_code=503, detail=str(e))
+    except ScraperRateLimited as e:
+        raise HTTPException(status_code=429, detail=str(e))
     except ScraperError as e:
         raise HTTPException(status_code=502, detail=f"Scraper failed: {e}")
 
@@ -293,6 +298,9 @@ async def generate_stream(payload: GenerateRequest):
             return
         except NoActiveAccounts as e:
             yield sse("error", {"error": str(e), "code": 503})
+            return
+        except ScraperRateLimited as e:
+            yield sse("error", {"error": str(e), "code": 429})
             return
         except ScraperError as e:
             yield sse("error", {"error": f"Scraper failed: {e}", "code": 502})

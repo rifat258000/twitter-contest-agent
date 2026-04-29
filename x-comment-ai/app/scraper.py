@@ -7,9 +7,11 @@ initialized once at FastAPI startup via `init_scraper()`.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
@@ -145,6 +147,29 @@ class NoActiveAccounts(ScraperError):
     """Raised when twscrape has no logged-in accounts available."""
 
 
+class ScraperRateLimited(ScraperError):
+    """All scraper accounts are currently locked for the requested queue.
+
+    Carries the next-available time (UTC) so the caller can format a useful
+    message for the user. ``next_available`` may be None if the queue lock
+    was not yet recorded (e.g. the timeout fired before twscrape entered the
+    waiting loop).
+    """
+
+    def __init__(self, queue: str, next_available, message: Optional[str] = None) -> None:
+        self.queue = queue
+        self.next_available = next_available  # datetime | None
+        super().__init__(message or self._default_message())
+
+    def _default_message(self) -> str:
+        if self.next_available is not None:
+            return (
+                f"X scraper is rate-limited on '{self.queue}'. "
+                f"Next available at {self.next_available:%H:%M:%S} UTC."
+            )
+        return f"X scraper is rate-limited on '{self.queue}'."
+
+
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------
@@ -205,6 +230,39 @@ _DB_PATH = os.getenv("TWSCRAPE_DB_PATH", "accounts/accounts.db")
 os.makedirs(os.path.dirname(_DB_PATH) or ".", exist_ok=True)
 
 api: API = API(_DB_PATH)
+
+
+# Per-tweet wait cap. twscrape's default behaviour blocks indefinitely while
+# all accounts are locked for the queue we need; for an interactive web app
+# this looks like a hang. 25 s is enough to absorb normal serialised-queue
+# wait without giving up too early.
+SCRAPE_TIMEOUT_S: float = float(os.getenv("SCRAPE_TIMEOUT_S", "25"))
+
+
+async def _next_available_for_queue(queue: str):
+    """Return the earliest UTC datetime any account becomes available for
+    ``queue``, or None if no lock is recorded.
+    """
+    try:
+        accounts = await api.pool.get_all()
+    except Exception:  # noqa: BLE001
+        return None
+    times = []
+    for a in accounts:
+        if not getattr(a, "active", False):
+            continue
+        lock_at = (getattr(a, "locks", None) or {}).get(queue)
+        if lock_at is None:
+            # An active account with no recorded lock for this queue is
+            # available *right now* — don't report a future time.
+            return None
+        times.append(lock_at)
+    if not times:
+        return None
+    earliest = min(times)
+    if earliest.tzinfo is None:
+        earliest = earliest.replace(tzinfo=timezone.utc)
+    return earliest
 
 
 async def _maybe_add_account_from_env() -> None:
@@ -402,8 +460,16 @@ async def fetch_tweet_text(url_or_id: str, include_thread: bool = True) -> Tweet
             "twscrape has no active accounts. Add and log in at least one account."
         )
 
+    # twscrape blocks indefinitely waiting for a queue lock to expire (default
+    # behaviour can be many minutes). For an interactive web app this looks
+    # like a hang, so cap the wait and surface a precise rate-limit error.
     try:
-        tweet: Optional[Tweet] = await api.tweet_details(tweet_id)
+        tweet: Optional[Tweet] = await asyncio.wait_for(
+            api.tweet_details(tweet_id), timeout=SCRAPE_TIMEOUT_S
+        )
+    except asyncio.TimeoutError:
+        next_at = await _next_available_for_queue("TweetDetail")
+        raise ScraperRateLimited("TweetDetail", next_at) from None
     except Exception as e:  # noqa: BLE001
         logger.exception("twscrape error for id={}", tweet_id)
         raise ScraperError(f"Scraper failure: {e}") from e
