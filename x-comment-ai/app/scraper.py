@@ -416,10 +416,15 @@ async def fetch_tweet_text(url_or_id: str, include_thread: bool = True) -> Tweet
         #   3. Tweet itself is unreachable (deleted, suspended author, NSFW/age-gated,
         #      region-restricted, or visible only to logged-in followers).
         accounts_after = await api.pool.accounts_info()
+        # twscrape serializes error_msg as str(x.error_msg)[0:60], which turns
+        # None into the literal string "None" — a truthy value. Filter it out
+        # explicitly so a rate-limited (no real error) account doesn't get
+        # misclassified as banned and send users down the wrong fix path.
         ban_msgs = [
             a.get("error_msg") or ""
             for a in accounts_after
-            if not a.get("active") and a.get("error_msg")
+            if not a.get("active")
+            and a.get("error_msg") not in (None, "", "None")
         ]
         any_active = any(a.get("active") for a in accounts_after)
 
