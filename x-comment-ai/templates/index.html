@@ -73,7 +73,7 @@
         ></textarea>
 
         <!-- Selectors row -->
-        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div>
             <label for="lang" class="block text-xs uppercase tracking-wider text-slate-400 mb-1">Language</label>
             <select id="lang" class="w-full rounded-xl bg-ink-800/80 border border-white/10 px-3 py-2.5 text-slate-100 outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition">
@@ -92,12 +92,21 @@
             </select>
           </div>
 
-          <div class="col-span-2 sm:col-span-1">
+          <div>
             <label for="length" class="block text-xs uppercase tracking-wider text-slate-400 mb-1">Length</label>
             <select id="length" class="w-full rounded-xl bg-ink-800/80 border border-white/10 px-3 py-2.5 text-slate-100 outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition">
               {% for l in lengths %}
               <option value="{{ l }}" {% if l == "medium" %}selected{% endif %}>{{ l|capitalize }}</option>
               {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-span-2 sm:col-span-1">
+            <label for="variants" class="block text-xs uppercase tracking-wider text-slate-400 mb-1" title="Lower = uses less Groq quota per post">Variants</label>
+            <select id="variants" class="w-full rounded-xl bg-ink-800/80 border border-white/10 px-3 py-2.5 text-slate-100 outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition">
+              <option value="1">1 (least quota)</option>
+              <option value="2" selected>2 (balanced)</option>
+              <option value="3">3 (most variety)</option>
             </select>
           </div>
         </div>

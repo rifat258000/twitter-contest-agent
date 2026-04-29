@@ -23,6 +23,7 @@
   const langSelect   = $('lang');
   const toneSelect   = $('tone');
   const lengthSelect = $('length');
+  const variantsSelect = $('variants');
   const submitBtn    = $('submit-btn');
   const btnLabel     = $('btn-label');
   const btnLabelText = $('btn-label-text');
@@ -89,6 +90,7 @@
     langSelect.disabled = on;
     toneSelect.disabled = on;
     lengthSelect.disabled = on;
+    if (variantsSelect) variantsSelect.disabled = on;
     btnLabel.classList.toggle('hidden', on);
     btnSpinner.classList.toggle('hidden', !on);
     btnSpinner.classList.toggle('inline-flex', on);
@@ -300,7 +302,7 @@
           lang:     langSelect.value || 'auto',
           tone:     toneSelect.value || 'witty',
           length:   lengthSelect.value || 'medium',
-          n: 3,
+          n: parseInt(variantsSelect?.value, 10) || 2,
         });
         postData = { ...postData, variants: data.variants || [] };
         variantsEl.innerHTML = '';
@@ -500,6 +502,7 @@
 
     const tone   = toneSelect.value || 'witty';
     const length = lengthSelect.value || 'medium';
+    const n = parseInt(variantsSelect?.value, 10) || 2;
     const lang   = langSelect.value   || 'auto';
 
     // Set up progress UI — always scoped to *this* batch.
@@ -524,7 +527,7 @@
     const runOne = async ({ url, card }) => {
       card.setStatus('loading', 'Fetching tweet + generating…');
       try {
-        const data = await callJSON('/generate', { url, lang, tone, length, n: 3 });
+        const data = await callJSON('/generate', { url, lang, tone, length, n });
         card.renderResult(data);
         card.setStatus('done', `Done · ${(data.variants || []).length} variants`);
         pushHistory({
