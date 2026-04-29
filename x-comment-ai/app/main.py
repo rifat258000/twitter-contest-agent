@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, HTTPException, Request  # noqa: E402
-from fastapi.responses import JSONResponse  # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from fastapi.templating import Jinja2Templates  # noqa: E402
 from loguru import logger  # noqa: E402
@@ -111,6 +111,35 @@ async def index(request: Request):
             "tones": list(TONES.keys()),
             "lengths": list(LENGTHS.keys()),
         },
+    )
+
+
+@app.get("/manifest.webmanifest", include_in_schema=False)
+async def manifest():
+    """PWA manifest. Served from /manifest.webmanifest so the URL stays at the
+    site root (better install heuristics in some browsers)."""
+    return FileResponse(
+        os.path.join(BASE_DIR, "static", "manifest.webmanifest"),
+        media_type="application/manifest+json",
+    )
+
+
+@app.get("/sw.js", include_in_schema=False)
+async def service_worker():
+    """Service worker MUST be served from the site root for its scope to cover '/'.
+    Adds Service-Worker-Allowed so we can also broaden scope explicitly."""
+    return FileResponse(
+        os.path.join(BASE_DIR, "static", "sw.js"),
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"},
+    )
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return FileResponse(
+        os.path.join(BASE_DIR, "static", "icons", "icon-32.png"),
+        media_type="image/png",
     )
 
 

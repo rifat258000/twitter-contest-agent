@@ -16,6 +16,19 @@ html, body {
   text-rendering: optimizeLegibility;
 }
 
+/* PWA: respect iOS notch / home-indicator safe areas in standalone mode. */
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left:  env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+@media (display-mode: standalone) {
+  /* In installed/standalone mode, give the hero a bit more breathing room
+     under the iOS status bar. */
+  main { padding-top: max(env(safe-area-inset-top), 24px); }
+}
+
 /* Apply tightest tracking only to display headings, not body, so 11–13px
    chrome text stays readable. */
 h1, h2 { letter-spacing: -0.035em; }

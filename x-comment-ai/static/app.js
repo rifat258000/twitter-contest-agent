@@ -16,6 +16,51 @@
 
   const $ = (id) => document.getElementById(id);
 
+  // ---------- PWA: service worker + install prompt ----------
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+    });
+  }
+
+  let deferredInstallPrompt = null;
+  const installBtn  = $('install-app');
+  const installHint = $('install-hint');
+
+  // Detect already-installed standalone mode (iOS + Android/Chrome).
+  const isStandalone =
+    window.matchMedia?.('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true;
+
+  // iOS Safari does NOT fire beforeinstallprompt — show a manual hint instead.
+  const ua = navigator.userAgent || '';
+  const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+  const isSafari = /Safari/.test(ua) && !/Chrome|CriOS|FxiOS|EdgiOS/.test(ua);
+
+  if (!isStandalone && isIOS && isSafari && installHint) {
+    installHint.hidden = false;
+  }
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    if (installBtn && !isStandalone) installBtn.hidden = false;
+  });
+
+  installBtn?.addEventListener('click', async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    const { outcome } = await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    installBtn.hidden = true;
+    if (outcome !== 'accepted' && installHint) installHint.hidden = false;
+  });
+
+  window.addEventListener('appinstalled', () => {
+    if (installBtn) installBtn.hidden = true;
+    if (installHint) installHint.hidden = true;
+  });
+
   // ---------- DOM refs ----------
   const form         = $('generate-form');
   const urlsInput    = $('urls');
