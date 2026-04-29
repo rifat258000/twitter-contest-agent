@@ -257,9 +257,29 @@ async def _maybe_add_account_from_env() -> None:
     )
 
     if existing:
-        # If we now have cookies but the existing account has no cookies, replace it.
-        if cookies_str and not existing.get("active"):
-            logger.info("Replacing inactive @{} with cookie-based account.", username)
+        # Detect when stored cookies differ from current env vars (e.g. user
+        # rotated their X session, fixed a paste error, or cookies expired).
+        # In that case we delete and re-add so the freshest values are used.
+        existing_cookies = existing.get("cookies") or {}
+        # `cookies` may come back as a JSON string; normalize.
+        if isinstance(existing_cookies, str):
+            try:
+                import json as _json
+                existing_cookies = _json.loads(existing_cookies)
+            except Exception:  # noqa: BLE001
+                existing_cookies = {}
+        cookies_changed = bool(cookies_str) and (
+            existing_cookies.get("auth_token") != auth_token
+            or (ct0 and existing_cookies.get("ct0") != ct0)
+        )
+
+        if cookies_changed or (cookies_str and not existing.get("active")):
+            logger.info(
+                "Refreshing @{} with cookies from env (changed={}, was_active={}).",
+                username,
+                cookies_changed,
+                existing.get("active"),
+            )
             try:
                 await api.pool.delete_accounts(username)
             except Exception as e:  # noqa: BLE001
