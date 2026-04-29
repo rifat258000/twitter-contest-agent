@@ -37,6 +37,8 @@
   const failedCount  = $('failed-count');
   const failedPlural = $('failed-plural');
   const failedCopy   = $('failed-copy');
+  const failedRetry  = $('failed-retry');
+  const failedRetryLabel = $('failed-retry-label');
 
   const progressWrap  = $('progress-wrap');
   const progressDone  = $('progress-done');
@@ -319,7 +321,8 @@
   };
 
   // ---------- failed-links summary ----------
-  const failed = []; // [{ url, msg }]
+  const failed = []; // [{ url, msg, card }]
+  let bulkRunning = false;
 
   const renderFailed = () => {
     failedCount.textContent = String(failed.length);
@@ -331,6 +334,7 @@
     }
     failedWrap.classList.remove('hidden');
     failedList.innerHTML = '';
+    failedRetry.disabled = bulkRunning;
     failed.forEach(({ url, msg }) => {
       const li = document.createElement('li');
       li.className = 'rounded-lg border border-rose-500/20 bg-rose-950/20 px-3 py-2 space-y-1';
@@ -352,8 +356,8 @@
     });
   };
 
-  const addFailed = (url, msg) => {
-    failed.push({ url, msg });
+  const addFailed = (url, msg, card) => {
+    failed.push({ url, msg, card });
     renderFailed();
   };
 
@@ -368,6 +372,29 @@
     const text = failed.map((f) => f.url).join('\n');
     const ok = await copyToClipboard(text);
     showToast(ok ? `Copied ${failed.length} URL${failed.length === 1 ? '' : 's'}` : 'Copy failed');
+  });
+
+  failedRetry.addEventListener('click', async () => {
+    if (bulkRunning || failed.length === 0) return;
+    // Snapshot the failures we're retrying — the array will be cleared and
+    // refilled with any new failures from the retry pass.
+    const toRetry = failed.slice();
+    // Remove the old failed cards from the DOM; new ones will replace them
+    // at the bottom of the post list as they get processed.
+    toRetry.forEach((f) => {
+      if (f.card?.node?.parentNode) f.card.node.parentNode.removeChild(f.card.node);
+    });
+    failed.length = 0;
+    renderFailed();
+
+    failedRetryLabel.textContent = `Retrying ${toRetry.length}…`;
+    failedRetry.disabled = true;
+    try {
+      await runBulk(toRetry.map((f) => f.url), { append: true });
+    } finally {
+      failedRetryLabel.textContent = 'Retry all failed';
+      failedRetry.disabled = bulkRunning || failed.length === 0;
+    }
   });
 
   // ---------- history (localStorage) ----------
@@ -467,19 +494,23 @@
    * Process URLs with a fixed concurrency cap.
    * Each URL gets its own card; failures don't poison other URLs.
    */
-  const runBulk = async (urls) => {
+  const runBulk = async (urls, opts = {}) => {
+    const append = !!opts.append;
+    if (urls.length === 0) return;
+
     const tone   = toneSelect.value || 'witty';
     const length = lengthSelect.value || 'medium';
     const lang   = langSelect.value   || 'auto';
 
-    // Set up progress UI
+    // Set up progress UI — always scoped to *this* batch.
     progressTotal.textContent = String(urls.length);
     progressDone.textContent = '0';
     progressFill.style.width = '0%';
     progressStats.textContent = '';
     progressWrap.classList.remove('hidden');
 
-    // Build all cards up-front so user sees the full list immediately
+    // Build all cards up-front so user sees the full list immediately.
+    // For retries we append at the bottom rather than wiping prior results.
     const cards = urls.map((u) => {
       const card = createPostCard(u);
       postsList.appendChild(card.node);
@@ -511,7 +542,7 @@
         console.error(url, err);
         const msg = err.message || 'Failed';
         card.setStatus('error', msg);
-        addFailed(url, msg);
+        addFailed(url, msg, card);
         errCount++;
       } finally {
         done++;
@@ -521,17 +552,30 @@
       }
     };
 
-    // Worker pool — each worker pulls jobs until queue empty
-    const queue = [...cards];
-    const worker = async () => {
-      while (queue.length) {
-        const job = queue.shift();
-        if (!job) return;
-        await runOne(job);
-      }
-    };
-    const workers = Array.from({ length: Math.min(CONCURRENCY, urls.length) }, () => worker());
-    await Promise.all(workers);
+    bulkRunning = true;
+    renderFailed();
+    try {
+      // Worker pool — each worker pulls jobs until queue empty
+      const queue = [...cards];
+      const worker = async () => {
+        while (queue.length) {
+          const job = queue.shift();
+          if (!job) return;
+          await runOne(job);
+        }
+      };
+      const workers = Array.from(
+        { length: Math.min(CONCURRENCY, urls.length) },
+        () => worker()
+      );
+      await Promise.all(workers);
+    } finally {
+      bulkRunning = false;
+      renderFailed();
+    }
+    // Reference `append` to silence unused-var warnings; reserved for future
+    // tweaks (e.g. continuing progress bar across batches).
+    void append;
   };
 
   // ---------- submit ----------
