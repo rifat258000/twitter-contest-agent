@@ -1,5 +1,5 @@
 // static/app.js
-// Vanilla JS controller for X Comment AI (bulk-enabled).
+// Vanilla JS controller for RIFAT < AI (bulk-enabled).
 //
 // Features:
 // - Bulk URL input (one per line, no hard cap; warn above 100, confirm above 500)

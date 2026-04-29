@@ -1,5 +1,5 @@
 """
-FastAPI entrypoint for X Comment AI.
+FastAPI entrypoint for RIFAT < AI.
 Run with:  uvicorn app.main:app --reload
 """
 
@@ -43,17 +43,17 @@ from app.scraper import fetch_tweet_text, init_scraper  # noqa: E402
 # ---------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Starting X Comment AI...")
+    logger.info("Starting RIFAT < AI...")
     try:
         await init_scraper()
     except Exception as e:  # noqa: BLE001
         logger.error("Scraper init failed: {}", e)
     yield
-    logger.info("Shutting down X Comment AI.")
+    logger.info("Shutting down RIFAT < AI.")
 
 
 app = FastAPI(
-    title="X Comment AI",
+    title="RIFAT < AI",
     description="Generate engaging X (Twitter) replies with Groq + twscrape.",
     version="1.0.0",
     lifespan=lifespan,

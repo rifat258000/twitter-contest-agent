@@ -1,10 +1,10 @@
-/* X Comment AI — service worker
+/* RIFAT < AI — service worker
  * Strategy: app-shell precache + network-first for HTML, cache-first for static.
  * /generate, /regenerate are NEVER cached (live data).
  */
-const VERSION = 'v3';
-const SHELL_CACHE = `xcommentai-shell-${VERSION}`;
-const RUNTIME_CACHE = `xcommentai-runtime-${VERSION}`;
+const VERSION = 'v4-rifat';
+const SHELL_CACHE = `rifatai-shell-${VERSION}`;
+const RUNTIME_CACHE = `rifatai-runtime-${VERSION}`;
 
 const SHELL_ASSETS = [
   '/',
@@ -82,7 +82,10 @@ self.addEventListener('fetch', (event) => {
             caches.open(RUNTIME_CACHE).then((c) => c.put(req, copy)).catch(() => {});
             return res;
           })
-          .catch(() => cached);
+          // On cache miss + network failure, respondWith() must still receive
+          // a Response object — returning `cached` here would be `undefined`
+          // and crash the worker. Synthesize a 408 instead.
+          .catch(() => cached || new Response('', { status: 408, statusText: 'Offline (asset unavailable)' }));
       })
     );
   }
