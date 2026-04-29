@@ -254,20 +254,16 @@
     authorHnd.textContent  = url;
     linkEl.href = url;
     textEl.textContent = '';
-    statusIcon.innerHTML = '<span class="inline-block h-2 w-2 rounded-full bg-slate-500"></span>';
+    statusIcon.classList.add('pending');
     statusText.textContent = 'Queued…';
 
     let postData = null; // populated on success
 
     const setStatus = (state, msg) => {
-      const colors = {
-        pending: 'bg-slate-500',
-        loading: 'bg-sky-400 animate-pulse',
-        done:    'bg-emerald-400',
-        error:   'bg-rose-500',
-      };
-      statusIcon.innerHTML =
-        `<span class="inline-block h-2 w-2 rounded-full ${colors[state] || colors.pending}"></span>`;
+      // The .post-status-icon element is styled via CSS based on the
+      // active state class — pending/loading/done/error.
+      statusIcon.classList.remove('pending', 'loading', 'done', 'error');
+      statusIcon.classList.add(state || 'pending');
       statusText.textContent = msg;
       statusText.classList.toggle('text-rose-300', state === 'error');
       statusText.classList.toggle('text-slate-400', state !== 'error');
@@ -339,7 +335,7 @@
     failedRetry.disabled = bulkRunning;
     failed.forEach(({ url, msg }) => {
       const li = document.createElement('li');
-      li.className = 'rounded-lg border border-rose-500/20 bg-rose-950/20 px-3 py-2 space-y-1';
+      li.className = 'rounded-xl border border-rose-500/15 bg-rose-950/25 px-3.5 py-2.5 space-y-1';
       const top = document.createElement('div');
       top.className = 'flex items-start justify-between gap-3';
       const a = document.createElement('a');
@@ -347,9 +343,9 @@
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
       a.textContent = url;
-      a.className = 'text-rose-200 hover:text-rose-100 underline-offset-4 hover:underline truncate text-xs sm:text-sm font-mono min-w-0';
+      a.className = 'text-rose-200 hover:text-rose-100 underline-offset-4 hover:underline truncate text-[12px] font-mono min-w-0';
       const reason = document.createElement('p');
-      reason.className = 'text-xs text-rose-300/80 leading-snug';
+      reason.className = 'text-[11.5px] text-rose-300/80 leading-snug';
       reason.textContent = msg || 'Failed';
       top.appendChild(a);
       li.appendChild(top);
@@ -436,20 +432,20 @@
     items.forEach((it) => {
       const li = document.createElement('li');
       li.className =
-        'flex items-start justify-between gap-3 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 px-3 py-2 cursor-pointer transition';
+        'flex items-start justify-between gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.025] hover:bg-white/[0.06] px-4 py-3 cursor-pointer';
       const left = document.createElement('div');
       left.className = 'min-w-0';
       const handle = document.createElement('p');
-      handle.className = 'text-xs text-slate-400 truncate';
+      handle.className = 'text-[11.5px] text-slate-500 truncate';
       handle.textContent = it.author || '@unknown';
       const preview = document.createElement('p');
-      preview.className = 'text-sm text-slate-200 truncate';
+      preview.className = 'text-[13.5px] text-slate-200 truncate mt-0.5';
       preview.textContent = truncate(it.original || '', 80);
       left.appendChild(handle);
       left.appendChild(preview);
 
       const right = document.createElement('span');
-      right.className = 'text-xs text-slate-500 shrink-0';
+      right.className = 'text-[11px] text-slate-600 shrink-0 mt-0.5 tabular-nums';
       right.textContent = new Date(it.at || Date.now()).toLocaleDateString();
 
       li.appendChild(left);

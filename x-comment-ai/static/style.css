@@ -1,115 +1,230 @@
 /* static/style.css
-   Custom additions on top of Tailwind: animated blobs, spinner,
-   smooth reveal animation for results, and a few polish bits.
+   Premium-tier polish: iOS-style glass surfaces, layered shadows,
+   tactile buttons, and subtle motion.
 */
 
 :root {
   color-scheme: dark;
+  --ios-blue: #0a84ff;
+  --ios-blue-press: #0070e0;
+  --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 html, body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-/* ---------- Animated background blobs ---------- */
+/* Apply tightest tracking only to display headings, not body, so 11–13px
+   chrome text stays readable. */
+h1, h2 { letter-spacing: -0.035em; }
+
+/* ---------- Glass material ---------- */
+.glass {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0)) ,
+    rgba(10, 12, 18, 0.72);
+  backdrop-filter: saturate(140%) blur(24px);
+  -webkit-backdrop-filter: saturate(140%) blur(24px);
+  border: 1px solid rgba(255,255,255,0.07);
+}
+
+/* ---------- Animated background blobs (toned down) ---------- */
 .blob {
   position: absolute;
   border-radius: 9999px;
-  filter: blur(80px);
-  opacity: 0.45;
+  filter: blur(110px);
+  opacity: 0.30;
   will-change: transform;
 }
-
 .blob-a {
-  top: -10%;
-  left: -10%;
-  width: 420px;
-  height: 420px;
-  background: radial-gradient(circle at 30% 30%, #38bdf8, transparent 60%);
-  animation: float-a 18s ease-in-out infinite;
+  top: -15%; left: -12%;
+  width: 520px; height: 520px;
+  background: radial-gradient(circle at 30% 30%, #0a84ff, transparent 60%);
+  animation: float-a 28s ease-in-out infinite;
 }
-
 .blob-b {
-  bottom: -15%;
-  right: -10%;
-  width: 480px;
-  height: 480px;
-  background: radial-gradient(circle at 70% 70%, #d946ef, transparent 60%);
-  animation: float-b 22s ease-in-out infinite;
+  bottom: -20%; right: -12%;
+  width: 560px; height: 560px;
+  background: radial-gradient(circle at 70% 70%, #6366f1, transparent 60%);
+  animation: float-b 32s ease-in-out infinite;
+  opacity: 0.22;
 }
-
 .blob-c {
-  top: 40%;
-  left: 50%;
+  top: 45%; left: 50%;
   transform: translate(-50%, -50%);
-  width: 360px;
-  height: 360px;
-  background: radial-gradient(circle, #6366f1, transparent 60%);
-  animation: float-c 26s ease-in-out infinite;
-  opacity: 0.35;
+  width: 420px; height: 420px;
+  background: radial-gradient(circle, #8b5cf6, transparent 60%);
+  animation: float-c 36s ease-in-out infinite;
+  opacity: 0.18;
 }
-
 @keyframes float-a {
   0%, 100% { transform: translate(0, 0) scale(1); }
-  50%      { transform: translate(40px, 30px) scale(1.08); }
+  50%      { transform: translate(40px, 30px) scale(1.06); }
 }
 @keyframes float-b {
   0%, 100% { transform: translate(0, 0) scale(1); }
-  50%      { transform: translate(-50px, -30px) scale(1.1); }
+  50%      { transform: translate(-50px, -30px) scale(1.08); }
 }
 @keyframes float-c {
   0%, 100% { transform: translate(-50%, -50%) scale(1); }
-  50%      { transform: translate(-45%, -55%) scale(1.12); }
+  50%      { transform: translate(-45%, -55%) scale(1.10); }
 }
-
 @media (prefers-reduced-motion: reduce) {
   .blob, .blob-a, .blob-b, .blob-c { animation: none !important; }
+}
+
+/* ---------- Primary button (iOS Blue) ---------- */
+.btn-primary {
+  background: linear-gradient(180deg, #1b91ff 0%, var(--ios-blue) 100%);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.18) inset,
+    0 0 0 1px rgba(255,255,255,0.05),
+    0 10px 28px -8px rgba(10, 132, 255, 0.55),
+    0 4px 10px -2px rgba(0, 0, 0, 0.4);
+  transition: transform 200ms var(--ease-ios), box-shadow 200ms var(--ease-ios), background 200ms var(--ease-ios);
+}
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #2da0ff 0%, #1690ff 100%);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.22) inset,
+    0 0 0 1px rgba(255,255,255,0.08),
+    0 14px 36px -8px rgba(10, 132, 255, 0.7),
+    0 6px 14px -4px rgba(0, 0, 0, 0.45);
+}
+.btn-primary:active:not(:disabled) {
+  transform: scale(0.985);
+  background: linear-gradient(180deg, var(--ios-blue-press) 0%, #005ec4 100%);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.10) inset,
+    0 0 0 1px rgba(255,255,255,0.04),
+    0 4px 10px -2px rgba(10, 132, 255, 0.4);
+}
+.btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: saturate(0.6);
+}
+
+/* ---------- Pill buttons (secondary actions) ---------- */
+.btn-pill {
+  border-radius: 9999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  color: rgb(226, 232, 240);
+  transition: background 160ms var(--ease-ios), border-color 160ms var(--ease-ios), transform 160ms var(--ease-ios);
+}
+.btn-pill:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.16); }
+.btn-pill:active { transform: scale(0.97); }
+
+.btn-pill-accent {
+  border-color: rgba(10, 132, 255, 0.32);
+  background: rgba(10, 132, 255, 0.10);
+  color: #6ab5ff;
+}
+.btn-pill-accent:hover { background: rgba(10, 132, 255, 0.18); border-color: rgba(10, 132, 255, 0.45); color: #93c8ff; }
+
+.btn-pill-emerald {
+  border-color: rgba(16, 185, 129, 0.32);
+  background: rgba(16, 185, 129, 0.10);
+  color: rgb(167, 243, 208);
+}
+.btn-pill-emerald:hover { background: rgba(16, 185, 129, 0.18); border-color: rgba(16, 185, 129, 0.45); }
+
+.btn-pill-rose {
+  border-color: rgba(244, 63, 94, 0.32);
+  background: rgba(244, 63, 94, 0.10);
+  color: rgb(254, 205, 211);
+}
+.btn-pill-rose:hover { background: rgba(244, 63, 94, 0.18); border-color: rgba(244, 63, 94, 0.45); }
+
+/* ---------- Ghost button (used by Copy / Regenerate) ---------- */
+.btn-ghost {
+  border-radius: 9999px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  color: rgb(203, 213, 225);
+  transition: background 160ms var(--ease-ios), border-color 160ms var(--ease-ios), transform 160ms var(--ease-ios);
+}
+.btn-ghost:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.14); color: rgb(241, 245, 249); }
+.btn-ghost:active { transform: scale(0.97); }
+
+/* ---------- iOS-style select ---------- */
+.select-ios {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  border-radius: 14px;
+  background-color: rgba(17, 20, 28, 0.7);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: rgb(226, 232, 240);
+  padding: 10px 36px 10px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  outline: none;
+  transition: border-color 160ms var(--ease-ios), box-shadow 160ms var(--ease-ios), background-color 160ms var(--ease-ios);
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='m6 9 6 6 6-6'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px;
+  cursor: pointer;
+}
+.select-ios:hover { background-color: rgba(20, 24, 34, 0.8); border-color: rgba(255,255,255,0.14); }
+.select-ios:focus {
+  border-color: rgba(10, 132, 255, 0.55);
+  box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.18);
 }
 
 /* ---------- Spinner ---------- */
 .spinner {
   display: inline-block;
-  width: 18px;
-  height: 18px;
+  width: 16px; height: 16px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.35);
+  border: 2px solid rgba(255, 255, 255, 0.30);
   border-top-color: #ffffff;
   animation: spin 0.7s linear infinite;
 }
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+@keyframes spin { to { transform: rotate(360deg); } }
 
-/* ---------- Results reveal ---------- */
+/* ---------- Reveal animations ---------- */
 #results:not(.hidden) {
-  animation: fade-up 0.45s cubic-bezier(.2,.8,.2,1) both;
+  animation: fade-up 0.5s var(--ease-ios) both;
 }
+.post-block { animation: fade-up 0.45s var(--ease-ios) both; }
+
 @keyframes fade-up {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-.variant {
-  animation: fade-up 0.45s cubic-bezier(.2,.8,.2,1) both;
+.variant { animation: variant-in 0.45s var(--ease-ios) both; }
+.variant:nth-child(2) { animation-delay: 0.06s; }
+.variant:nth-child(3) { animation-delay: 0.12s; }
+@keyframes variant-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
-.variant:nth-child(2) { animation-delay: 0.08s; }
-.variant:nth-child(3) { animation-delay: 0.16s; }
+
+/* ---------- Toast ---------- */
+.toast { animation: toast-in 0.32s var(--ease-ios); }
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
 
 /* ---------- Char counter colour states ---------- */
 .variant-counter.warn   { color: #fbbf24; }
 .variant-counter.danger { color: #f87171; font-weight: 600; }
 
 /* ---------- Shake on error ---------- */
-.shake {
-  animation: shake 0.45s ease-in-out;
-}
+.shake { animation: shake 0.45s ease-in-out; }
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
-  20%      { transform: translateX(-6px); }
-  40%      { transform: translateX(6px); }
-  60%      { transform: translateX(-4px); }
-  80%      { transform: translateX(4px); }
+  20%      { transform: translateX(-5px); }
+  40%      { transform: translateX(5px); }
+  60%      { transform: translateX(-3px); }
+  80%      { transform: translateX(3px); }
 }
 
 /* ---------- Custom scrollbar ---------- */
@@ -117,10 +232,12 @@ html, body {
   ::-webkit-scrollbar       { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.06);
     border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
   }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.16); }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.14); background-clip: padding-box; }
 }
 
 /* ---------- contenteditable placeholder ---------- */
@@ -128,3 +245,24 @@ html, body {
   content: attr(data-placeholder);
   color: rgba(148, 163, 184, 0.6);
 }
+
+/* ---------- Status icon dots (used by JS setStatus) ---------- */
+.post-status-icon { display: inline-block; width: 8px; height: 8px; border-radius: 9999px; }
+.post-status-icon.pending { background: rgb(148, 163, 184); }
+.post-status-icon.loading {
+  background: var(--ios-blue);
+  box-shadow: 0 0 0 0 rgba(10, 132, 255, 0.6);
+  animation: pulse-ring 1.4s ease-out infinite;
+}
+.post-status-icon.done    { background: #34d399; }
+.post-status-icon.error   { background: #fb7185; }
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(10, 132, 255, 0.55); }
+  100% { box-shadow: 0 0 0 10px rgba(10, 132, 255, 0); }
+}
+
+/* ---------- History list items refined hover ---------- */
+#history-list li {
+  transition: background 160ms var(--ease-ios), border-color 160ms var(--ease-ios), transform 160ms var(--ease-ios);
+}
+#history-list li:hover { transform: translateY(-1px); }
