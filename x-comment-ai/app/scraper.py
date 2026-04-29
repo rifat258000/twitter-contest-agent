@@ -403,8 +403,8 @@ async def fetch_tweet_text(url_or_id: str, include_thread: bool = True) -> Tweet
     tweet_id = extract_tweet_id(url_or_id)
     logger.info("Fetching tweet id={}", tweet_id)
 
-    accounts = await api.pool.accounts_info()
-    if not any(a.get("active") for a in accounts):
+    accounts_before = await api.pool.accounts_info()
+    if not any(a.get("active") for a in accounts_before):
         raise NoActiveAccounts(
             "twscrape has no active accounts. Add and log in at least one account."
         )
@@ -416,9 +416,41 @@ async def fetch_tweet_text(url_or_id: str, include_thread: bool = True) -> Tweet
         raise ScraperError(f"Scraper failure: {e}") from e
 
     if not tweet:
+        # Re-inspect account state to classify why twscrape returned None.
+        # Possible causes:
+        #   1. Account got banned mid-request → active flipped to False / error_msg set.
+        #   2. Account got rate-limited → still active=True but locked for this queue.
+        #   3. Tweet itself is unreachable (deleted, suspended author, NSFW/age-gated,
+        #      region-restricted, or visible only to logged-in followers).
+        accounts_after = await api.pool.accounts_info()
+        ban_msgs = [
+            a.get("error_msg") or ""
+            for a in accounts_after
+            if not a.get("active") and a.get("error_msg")
+        ]
+        any_active = any(a.get("active") for a in accounts_after)
+
+        if ban_msgs and not any_active:
+            # All accounts inactive and at least one carries an error reason.
+            reason = ban_msgs[0][:100]
+            logger.warning("Tweet {} fetch failed; account banned: {}", tweet_id, reason)
+            raise TweetNotFound(
+                f"Tweet {tweet_id}: scraper account is blocked by X "
+                f"({reason}). Refresh cookies in env vars and redeploy."
+            )
+
+        # Account survived the request → most likely the tweet itself is unreachable.
+        # Could still be a transient rate-limit lock that twscrape swallowed; mention it.
+        logger.info(
+            "Tweet {} returned no data; account state still active. "
+            "Likely deleted/private/restricted or transient rate-limit.",
+            tweet_id,
+        )
         raise TweetNotFound(
-            f"Tweet {tweet_id} could not be fetched. "
-            "It may be deleted, private, or rate-limited."
+            f"Tweet {tweet_id} returned no data. Most likely cause: the post is "
+            "deleted, the author is suspended/private, or the post is age- or "
+            "region-restricted to your scraper account. (Less likely: transient "
+            "X rate-limit — retrying in a few minutes may help.)"
         )
 
     handle, name = _format_handle(tweet)
