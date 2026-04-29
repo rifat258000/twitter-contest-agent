@@ -294,13 +294,37 @@
     const regenBtn   = node.querySelector('.post-regen-btn');
     const regenLabel = node.querySelector('.post-regen-label');
 
-    // Initial pending state — link still works since we have the URL
-    authorName.textContent = '—';
-    authorHnd.textContent  = url;
+    // Skeleton placeholders shown while pending/loading. They replace
+    // themselves with real text once renderResult() runs.
+    const setSkeleton = (on, variantCount = 0) => {
+      if (on) {
+        authorName.innerHTML = '<span class="skeleton skeleton-line" style="width:110px;"></span>';
+        authorHnd.innerHTML  = '<span class="skeleton skeleton-line-sm" style="width:160px;"></span>';
+        textEl.innerHTML =
+          '<span class="skeleton skeleton-block" style="width:100%;"></span>' +
+          '<span class="skeleton skeleton-block" style="width:88%;"></span>' +
+          '<span class="skeleton skeleton-block" style="width:62%;"></span>';
+        // Pre-render N skeleton variant cards so the variants section
+        // already has shape before Groq returns.
+        if (variantCount > 0) {
+          variantsEl.innerHTML = '';
+          for (let i = 0; i < variantCount; i++) {
+            variantsEl.insertAdjacentHTML('beforeend',
+              '<div class="skeleton-variant">' +
+                '<span class="skeleton skeleton-line" style="width:30%;"></span>' +
+                '<span class="skeleton skeleton-block" style="width:100%;"></span>' +
+                '<span class="skeleton skeleton-block" style="width:92%;"></span>' +
+                '<span class="skeleton skeleton-block" style="width:48%;"></span>' +
+              '</div>');
+          }
+        }
+      }
+    };
+
     linkEl.href = url;
-    textEl.textContent = '';
     statusIcon.classList.add('pending');
     statusText.textContent = 'Queued…';
+    setSkeleton(true);
 
     let postData = null; // populated on success
 
@@ -360,7 +384,7 @@
       }
     });
 
-    return { node, setStatus, renderResult, getData: () => postData, url };
+    return { node, setStatus, renderResult, setSkeleton, getData: () => postData, url };
   };
 
   // ---------- failed-links summary ----------
@@ -567,6 +591,7 @@
 
     const runOne = async ({ url, card }) => {
       card.setStatus('loading', 'Fetching tweet + generating…');
+      card.setSkeleton(true, n);
       try {
         const data = await callJSON('/generate', { url, lang, tone, length, n });
         card.renderResult(data);
@@ -888,6 +913,229 @@
     }
     if (contestAutoref.checked) {
       contestAutoTimer = setInterval(() => runContestSearch({ silent: true }), 60_000);
+    }
+  });
+
+  // ===========================================================================
+  // Haptics + sound feedback
+  // Single mute toggle persisted to localStorage. Default: on (premium feel).
+  // ===========================================================================
+  const FX_KEY = 'rifat-ai:fx-muted';
+  const isMuted = () => localStorage.getItem(FX_KEY) === '1';
+  const setMuted = (v) => localStorage.setItem(FX_KEY, v ? '1' : '0');
+
+  // Lazily-created shared AudioContext — browsers throttle them on first
+  // load until a user gesture. We init on first call.
+  let audioCtx = null;
+  const getAudioCtx = () => {
+    if (audioCtx) return audioCtx;
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    if (!Ctor) return null;
+    audioCtx = new Ctor();
+    return audioCtx;
+  };
+
+  // Tiny synthesized "tick" — single sine ping with a fast decay envelope.
+  // Bytes-free vs. shipping a WAV asset, and tweakable per-event.
+  const playTick = (freq, duration, gain = 0.06) => {
+    if (isMuted()) return;
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    try {
+      const osc = ctx.createOscillator();
+      const env = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      env.gain.value = 0;
+      env.gain.linearRampToValueAtTime(gain, ctx.currentTime + 0.005);
+      env.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+      osc.connect(env).connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + duration + 0.02);
+    } catch (_) { /* ignore */ }
+  };
+
+  const buzz = (ms) => {
+    if (isMuted()) return;
+    if (navigator.vibrate) navigator.vibrate(ms);
+  };
+
+  const fx = {
+    tap:     () => { buzz(8);  playTick(880, 0.06, 0.05); },   // generic press
+    success: () => { buzz(15); playTick(880, 0.05, 0.06); setTimeout(() => playTick(1320, 0.07, 0.05), 60); }, // two-note up
+    error:   () => { buzz([12, 60, 12]); playTick(220, 0.18, 0.07); },
+    swoosh:  () => { buzz(6);  playTick(560, 0.05, 0.04); setTimeout(() => playTick(720, 0.05, 0.03), 35); }, // tab switch
+    copy:    () => { buzz(10); playTick(1100, 0.04, 0.05); },
+  };
+
+  // ---- Wire fx into existing actions ----
+  // 1. Tab switches (swoosh)
+  tabGenerate?.addEventListener('click', () => fx.swoosh());
+  tabContests?.addEventListener('click', () => fx.swoosh());
+
+  // 2. Form submit success/error — hook progress completion via mutation
+  //    on progressStats text. Cleaner than threading callbacks through.
+  const progressStatsEl = $('progress-stats');
+  if (progressStatsEl) {
+    let lastText = '';
+    new MutationObserver(() => {
+      const t = progressStatsEl.textContent || '';
+      if (t === lastText) return;
+      lastText = t;
+      const m = t.match(/^(\d+)\s+ok\s+·\s+(\d+)\s+failed$/);
+      if (!m) return;
+      const ok = parseInt(m[1], 10), bad = parseInt(m[2], 10);
+      const total = ok + bad;
+      const expected = parseInt(progressTotal?.textContent || '0', 10);
+      // Only fire once per batch — when done count hits expected.
+      if (total > 0 && total === expected) {
+        if (bad === 0) fx.success();
+        else if (ok === 0) fx.error();
+        else fx.tap(); // partial — neutral
+      }
+    }).observe(progressStatsEl, { childList: true, characterData: true, subtree: true });
+  }
+
+  // 3. Copy buttons — delegate-fire on click anywhere in posts list
+  postsList?.addEventListener('click', (e) => {
+    if (e.target.closest('.copy-btn')) fx.copy();
+  });
+
+  // ===========================================================================
+  // Keyboard shortcuts
+  // Cmd/Ctrl + Enter      → submit Generate form (works inside textarea too)
+  // Cmd/Ctrl + 1          → switch to Generate tab
+  // Cmd/Ctrl + 2          → switch to Find Contests tab
+  // R                     → regenerate the post card under cursor / focused
+  // Esc                   → blur active input or close shortcut sheet
+  // ?  (Shift + /)        → toggle the shortcut cheatsheet
+  // ===========================================================================
+  const isMac = /Mac|iPhone|iPad/.test(navigator.platform || '');
+  const modKey = (e) => (isMac ? e.metaKey : e.ctrlKey);
+
+  // Update the inline kbd hint on the submit button to match platform.
+  const kbdMod = document.getElementById('kbd-mod');
+  if (kbdMod) kbdMod.textContent = isMac ? '⌘' : 'Ctrl';
+
+  const cheatsheet = document.createElement('div');
+  cheatsheet.id = 'shortcut-sheet';
+  cheatsheet.className = 'hidden fixed inset-0 z-50 flex items-center justify-center px-4';
+  cheatsheet.innerHTML = `
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" data-close></div>
+    <div class="relative glass rounded-3xl p-7 sm:p-8 max-w-md w-full shadow-card text-[14px]">
+      <div class="flex items-center justify-between mb-5">
+        <h3 class="text-[18px] font-semibold tracking-tight">Keyboard shortcuts</h3>
+        <button type="button" data-close class="btn-ghost rounded-full px-2.5 py-1 text-[12px]">Esc</button>
+      </div>
+      <ul class="space-y-2.5">
+        <li class="flex items-center justify-between gap-4">
+          <span class="text-slate-300">Generate replies</span>
+          <kbd class="kbd">${isMac ? '⌘' : 'Ctrl'}</kbd><kbd class="kbd">Enter</kbd>
+        </li>
+        <li class="flex items-center justify-between gap-4">
+          <span class="text-slate-300">Switch to Generate tab</span>
+          <kbd class="kbd">${isMac ? '⌘' : 'Ctrl'}</kbd><kbd class="kbd">1</kbd>
+        </li>
+        <li class="flex items-center justify-between gap-4">
+          <span class="text-slate-300">Switch to Find Contests tab</span>
+          <kbd class="kbd">${isMac ? '⌘' : 'Ctrl'}</kbd><kbd class="kbd">2</kbd>
+        </li>
+        <li class="flex items-center justify-between gap-4">
+          <span class="text-slate-300">Toggle this sheet</span>
+          <kbd class="kbd">?</kbd>
+        </li>
+        <li class="flex items-center justify-between gap-4">
+          <span class="text-slate-300">Mute / unmute sound + haptics</span>
+          <kbd class="kbd">M</kbd>
+        </li>
+      </ul>
+      <div class="mt-5 pt-4 border-t border-white/[0.06] flex items-center justify-between text-[12px]">
+        <label class="flex items-center gap-2 text-slate-400 cursor-pointer">
+          <input type="checkbox" id="fx-mute-toggle" class="accent-accent-500">
+          Mute sound + haptics
+        </label>
+        <span class="text-slate-500">Press <kbd class="kbd">?</kbd> any time</span>
+      </div>
+    </div>`;
+  document.body.appendChild(cheatsheet);
+
+  const showSheet = () => {
+    cheatsheet.classList.remove('hidden');
+    document.getElementById('fx-mute-toggle').checked = isMuted();
+  };
+  const hideSheet = () => cheatsheet.classList.add('hidden');
+  const sheetVisible = () => !cheatsheet.classList.contains('hidden');
+
+  cheatsheet.addEventListener('click', (e) => {
+    if (e.target.matches('[data-close]')) hideSheet();
+  });
+  document.getElementById('fx-mute-toggle')?.addEventListener('change', (e) => {
+    setMuted(e.target.checked);
+    if (!e.target.checked) fx.tap(); // confirm unmute
+  });
+
+  // Subtle floating ? button bottom-right so the shortcuts are discoverable.
+  const helpBtn = document.createElement('button');
+  helpBtn.type = 'button';
+  helpBtn.id = 'shortcut-help-btn';
+  helpBtn.title = 'Keyboard shortcuts (?)';
+  helpBtn.className = 'fixed bottom-4 right-4 z-40 h-10 w-10 rounded-full glass shadow-lift text-slate-300 hover:text-white text-[16px] font-semibold transition-colors';
+  helpBtn.textContent = '?';
+  helpBtn.addEventListener('click', () => { fx.tap(); showSheet(); });
+  document.body.appendChild(helpBtn);
+
+  document.addEventListener('keydown', (e) => {
+    // Don't intercept shortcuts when user is typing inside contenteditable
+    // variants (lets them edit freely).
+    const inEditable = e.target?.isContentEditable;
+
+    if (e.key === 'Escape') {
+      if (sheetVisible()) { hideSheet(); e.preventDefault(); return; }
+      if (document.activeElement && document.activeElement !== document.body) {
+        document.activeElement.blur();
+      }
+      return;
+    }
+
+    // Cmd/Ctrl + Enter → submit Generate form (even from inside textarea)
+    if (modKey(e) && e.key === 'Enter') {
+      e.preventDefault();
+      // Only fire if Generate panel is visible.
+      if (panelGenerate && !panelGenerate.classList.contains('hidden')) {
+        fx.tap();
+        form?.requestSubmit?.() || form?.submit?.();
+      } else if (panelContests && !panelContests.classList.contains('hidden')) {
+        fx.tap();
+        contestForm?.requestSubmit?.() || contestForm?.submit?.();
+      }
+      return;
+    }
+
+    // Cmd/Ctrl + 1 / 2 → tab switch
+    if (modKey(e) && (e.key === '1' || e.key === '2')) {
+      e.preventDefault();
+      switchTab(e.key === '1' ? 'generate' : 'contests');
+      return;
+    }
+
+    // Single-letter shortcuts skipped while typing in plain inputs/contenteditable
+    const tag = (e.target?.tagName || '').toLowerCase();
+    const inText = inEditable || tag === 'input' || tag === 'textarea' || tag === 'select';
+    if (inText) return;
+
+    if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+      e.preventDefault();
+      sheetVisible() ? hideSheet() : showSheet();
+      fx.tap();
+      return;
+    }
+
+    if (e.key === 'm' || e.key === 'M') {
+      const next = !isMuted();
+      setMuted(next);
+      // Confirm with a tap if we just unmuted (otherwise muted = no feedback)
+      if (!next) fx.tap();
+      return;
     }
   });
 })();
