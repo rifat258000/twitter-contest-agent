@@ -265,9 +265,14 @@ async def _next_available_for_queue(queue: str):
     return earliest
 
 
-async def _maybe_add_account_from_env() -> None:
+async def _maybe_add_account_from_env(suffix: str = "") -> None:
     """
     Add an X account to the twscrape pool from environment variables.
+
+    ``suffix`` lets multiple accounts be configured side-by-side. The first
+    account uses the bare names (``X_TWSCRAPE_USERNAME``, ``X_AUTH_TOKEN``,
+    ``X_CT0``…); additional accounts use ``_2``, ``_3``, … (e.g.
+    ``X_TWSCRAPE_USERNAME_2``, ``X_AUTH_TOKEN_2``, ``X_CT0_2``).
 
     Two ways to provide credentials:
     1. Cookies (preferred for cloud deploys — bypasses Cloudflare login wall):
@@ -287,16 +292,16 @@ async def _maybe_add_account_from_env() -> None:
     provides cookies, the existing account is deleted and re-added so the
     cookies take effect.
     """
-    username = os.getenv("X_TWSCRAPE_USERNAME", "").strip()
+    username = os.getenv(f"X_TWSCRAPE_USERNAME{suffix}", "").strip()
     if not username:
         return
 
-    password = os.getenv("X_TWSCRAPE_PASSWORD", "").strip() or "x"
-    email = os.getenv("X_TWSCRAPE_EMAIL", "").strip() or f"{username}@example.com"
-    email_password = os.getenv("X_TWSCRAPE_EMAIL_PASSWORD", "").strip() or "x"
+    password = os.getenv(f"X_TWSCRAPE_PASSWORD{suffix}", "").strip() or "x"
+    email = os.getenv(f"X_TWSCRAPE_EMAIL{suffix}", "").strip() or f"{username}@example.com"
+    email_password = os.getenv(f"X_TWSCRAPE_EMAIL_PASSWORD{suffix}", "").strip() or "x"
 
-    auth_token = (os.getenv("X_AUTH_TOKEN", "").split() or [""])[0]
-    ct0 = (os.getenv("X_CT0", "").split() or [""])[0]
+    auth_token = (os.getenv(f"X_AUTH_TOKEN{suffix}", "").split() or [""])[0]
+    ct0 = (os.getenv(f"X_CT0{suffix}", "").split() or [""])[0]
     cookies_str: str | None = None
     if auth_token and ct0:
         cookies_str = f"auth_token={auth_token}; ct0={ct0}"
@@ -378,7 +383,15 @@ async def init_scraper() -> None:
     """
     logger.info("Initializing twscrape (db={})...", _DB_PATH)
 
+    # Slot 1 uses bare env names; slots 2..N use _2, _3, … suffixes.
+    # Stops at the first empty USERNAME slot (no holes allowed).
     await _maybe_add_account_from_env()
+    slot = 2
+    while os.getenv(f"X_TWSCRAPE_USERNAME_{slot}", "").strip():
+        await _maybe_add_account_from_env(suffix=f"_{slot}")
+        slot += 1
+        if slot > 10:  # safety cap; nobody should be running 10+ accounts here
+            break
 
     # Clear any stale per-queue locks from previous runs so a single transient
     # twscrape error doesn't leave the pool unusable for 15 minutes.
