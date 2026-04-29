@@ -19,6 +19,11 @@ services:
     name: rifat-ai
     runtime: docker
     repo: https://github.com/rifat258000/twitter-contest-agent
+    # NOTE: pinned to the feature branch while this PR is unmerged, because
+    # `main` currently only has README.md and would 404 the build. CHANGE TO
+    # `main` THE MOMENT THIS PR IS MERGED — otherwise Render will keep
+    # deploying stale code from the feature branch (or fail entirely if the
+    # branch is deleted post-merge).
     branch: devin/1777467860-x-comment-ai
     rootDir: x-comment-ai
     dockerfilePath: ./Dockerfile
