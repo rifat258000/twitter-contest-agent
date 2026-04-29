@@ -115,6 +115,29 @@ class RegenerateResponse(BaseModel):
     variants: list[str]
 
 
+class PreviewRequest(BaseModel):
+    """Lightweight 'just scrape, don't generate' for the auto-paste preview UI.
+
+    Resolves URLs into author/handle/text in parallel, capped at 10 per call to
+    avoid burning the X scraping budget on a paste of hundreds of URLs.
+    """
+    urls: list[str] = Field(default_factory=list, max_length=10)
+
+
+class PreviewItem(BaseModel):
+    url: str
+    ok: bool
+    tweet_id: Optional[str] = None
+    author: Optional[str] = None
+    author_name: Optional[str] = None
+    text_preview: Optional[str] = None
+    error: Optional[str] = None
+
+
+class PreviewResponse(BaseModel):
+    results: list[PreviewItem]
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -237,6 +260,40 @@ async def contests_search(payload: ContestSearchRequest):
         mode=mode,
         results=[r.to_dict() for r in results],
     )
+
+
+@app.post("/preview", response_model=PreviewResponse)
+async def preview(payload: PreviewRequest):
+    """Resolve URLs to tweet metadata in parallel WITHOUT calling Groq.
+
+    Used by the frontend to render real post cards as soon as a user pastes URLs,
+    so the wait between paste and Generate doesn't feel empty. Each URL gets
+    short-circuited if it fails — failures don't propagate to other URLs.
+    """
+    import asyncio as _asyncio
+
+    sem = _asyncio.Semaphore(3)  # match scrape concurrency cap
+
+    async def _one(url: str) -> PreviewItem:
+        async with sem:
+            try:
+                t = await fetch_tweet_text(url, include_thread=False)
+                preview_text = (t.text or "")[:240]
+                return PreviewItem(
+                    url=t.url,
+                    ok=True,
+                    tweet_id=str(t.id),
+                    author=t.author,
+                    author_name=t.author_name,
+                    text_preview=preview_text,
+                )
+            except (InvalidTweetURL, TweetNotFound, NoActiveAccounts, ScraperError) as e:
+                return PreviewItem(url=url, ok=False, error=str(e))
+            except Exception as e:  # noqa: BLE001
+                return PreviewItem(url=url, ok=False, error=f"Preview failed: {e}")
+
+    results = await _asyncio.gather(*(_one(u) for u in payload.urls))
+    return PreviewResponse(results=list(results))
 
 
 @app.post("/regenerate", response_model=RegenerateResponse)

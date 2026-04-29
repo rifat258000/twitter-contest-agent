@@ -135,7 +135,12 @@
       <form id="generate-form" class="space-y-5" novalidate>
         <div class="flex items-center justify-between">
           <label for="urls" class="block text-[13px] font-medium text-slate-200">X post URLs <span class="text-slate-500 font-normal">· one per line</span></label>
-          <span id="url-count" class="text-[11px] tabular-nums text-slate-500">0 URLs</span>
+          <div class="flex items-center gap-2">
+            <span id="url-preview-badge"
+              class="hidden text-[10px] font-medium tabular-nums px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/20">
+            </span>
+            <span id="url-count" class="text-[11px] tabular-nums text-slate-500">0 URLs</span>
+          </div>
         </div>
         <textarea
           id="urls" name="urls" required autocomplete="off" spellcheck="false" rows="6"

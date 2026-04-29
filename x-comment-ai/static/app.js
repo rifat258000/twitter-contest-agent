@@ -211,6 +211,76 @@
   };
   urlsInput.addEventListener('input', updateUrlCount);
 
+  // ---------- auto-paste preview cache ----------
+  // url → { ok, author, author_name, text_preview, tweet_id, url }
+  // Populated by debounced /preview calls fired on textarea input. Used by
+  // createPostCard to skip the header skeleton and show real metadata as
+  // soon as the URL is resolved.
+  const previewCache = new Map();
+  const previewInflight = new Set();
+  const PREVIEW_BATCH_LIMIT = 10;
+
+  let previewDebounce = null;
+  const schedulePreviewFetch = () => {
+    clearTimeout(previewDebounce);
+    previewDebounce = setTimeout(runPreviewFetch, 600);
+  };
+
+  const runPreviewFetch = async () => {
+    const urls = parseUrls(urlsInput.value);
+    // Only fetch what we don't already have / aren't already fetching.
+    const fresh = urls.filter(
+      (u) => !previewCache.has(u) && !previewInflight.has(u)
+    ).slice(0, PREVIEW_BATCH_LIMIT);
+    if (fresh.length === 0) return;
+    fresh.forEach((u) => previewInflight.add(u));
+    try {
+      const r = await fetch('/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: fresh }),
+      });
+      if (!r.ok) return;
+      const data = await r.json().catch(() => ({}));
+      (data.results || []).forEach((item, idx) => {
+        if (item && item.ok) {
+          previewCache.set(item.url, item);
+          // Also key by the originally-pasted URL so cache lookups by either
+          // form succeed. parseUrls normalises but server may canonicalise
+          // (e.g. https://twitter.com/... → https://x.com/...).
+          const requested = fresh[idx];
+          if (requested && requested !== item.url) previewCache.set(requested, item);
+        }
+      });
+      updatePreviewBadge();
+    } catch (_) { /* ignore — preview is best-effort */ }
+    finally { fresh.forEach((u) => previewInflight.delete(u)); }
+  };
+
+  // Show a small "Found N tweets" badge near the URL counter so users see
+  // the previews are working.
+  const updatePreviewBadge = () => {
+    const urls = parseUrls(urlsInput.value);
+    if (!urls.length) {
+      if (urlPreviewBadge) urlPreviewBadge.classList.add('hidden');
+      return;
+    }
+    const ready = urls.filter((u) => previewCache.has(u)).length;
+    if (ready === 0) {
+      urlPreviewBadge?.classList.add('hidden');
+      return;
+    }
+    if (!urlPreviewBadge) return;
+    urlPreviewBadge.textContent = `${ready}/${urls.length} ready`;
+    urlPreviewBadge.classList.remove('hidden');
+  };
+
+  const urlPreviewBadge = document.getElementById('url-preview-badge');
+
+  // Trigger preview on input (debounced) and on paste (immediate-ish).
+  urlsInput.addEventListener('input', schedulePreviewFetch);
+  urlsInput.addEventListener('paste', () => setTimeout(schedulePreviewFetch, 50));
+
   // ---------- variant rendering ----------
   const updateCounter = (counterEl, len) => {
     counterEl.textContent = `${len} / ${X_LIMIT}`;
@@ -296,27 +366,40 @@
 
     // Skeleton placeholders shown while pending/loading. They replace
     // themselves with real text once renderResult() runs.
+    const applyHeaderSkeleton = () => {
+      authorName.innerHTML = '<span class="skeleton skeleton-line" style="width:110px;"></span>';
+      authorHnd.innerHTML  = '<span class="skeleton skeleton-line-sm" style="width:160px;"></span>';
+      textEl.innerHTML =
+        '<span class="skeleton skeleton-block" style="width:100%;"></span>' +
+        '<span class="skeleton skeleton-block" style="width:88%;"></span>' +
+        '<span class="skeleton skeleton-block" style="width:62%;"></span>';
+    };
+
+    const applyHeader = (preview) => {
+      authorName.textContent = preview.author_name || preview.author || '—';
+      authorHnd.textContent  = preview.author || '';
+      linkEl.href            = preview.url || url;
+      textEl.textContent     = truncate(preview.text_preview || '', MAX_POST_PREVIEW);
+    };
+
     const setSkeleton = (on, variantCount = 0) => {
-      if (on) {
-        authorName.innerHTML = '<span class="skeleton skeleton-line" style="width:110px;"></span>';
-        authorHnd.innerHTML  = '<span class="skeleton skeleton-line-sm" style="width:160px;"></span>';
-        textEl.innerHTML =
-          '<span class="skeleton skeleton-block" style="width:100%;"></span>' +
-          '<span class="skeleton skeleton-block" style="width:88%;"></span>' +
-          '<span class="skeleton skeleton-block" style="width:62%;"></span>';
-        // Pre-render N skeleton variant cards so the variants section
-        // already has shape before Groq returns.
-        if (variantCount > 0) {
-          variantsEl.innerHTML = '';
-          for (let i = 0; i < variantCount; i++) {
-            variantsEl.insertAdjacentHTML('beforeend',
-              '<div class="skeleton-variant">' +
-                '<span class="skeleton skeleton-line" style="width:30%;"></span>' +
-                '<span class="skeleton skeleton-block" style="width:100%;"></span>' +
-                '<span class="skeleton skeleton-block" style="width:92%;"></span>' +
-                '<span class="skeleton skeleton-block" style="width:48%;"></span>' +
-              '</div>');
-          }
+      if (!on) return;
+      // If we have a server-resolved preview for this URL, render the real
+      // header + body now and only skeletonise the (still-loading) variants.
+      const preview = (typeof previewCache !== 'undefined') ? previewCache.get(url) : null;
+      if (preview) applyHeader(preview);
+      else applyHeaderSkeleton();
+
+      if (variantCount > 0) {
+        variantsEl.innerHTML = '';
+        for (let i = 0; i < variantCount; i++) {
+          variantsEl.insertAdjacentHTML('beforeend',
+            '<div class="skeleton-variant">' +
+              '<span class="skeleton skeleton-line" style="width:30%;"></span>' +
+              '<span class="skeleton skeleton-block" style="width:100%;"></span>' +
+              '<span class="skeleton skeleton-block" style="width:92%;"></span>' +
+              '<span class="skeleton skeleton-block" style="width:48%;"></span>' +
+            '</div>');
         }
       }
     };
@@ -693,6 +776,7 @@
       if (text && URL_RE.test(text)) {
         urlsInput.value = text.trim();
         updateUrlCount();
+        schedulePreviewFetch();
       }
     } catch { /* ignore */ }
   });
