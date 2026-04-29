@@ -97,14 +97,45 @@ os.makedirs(os.path.dirname(_DB_PATH) or ".", exist_ok=True)
 api: API = API(_DB_PATH)
 
 
+async def _maybe_add_account_from_env() -> None:
+    """
+    If `X_TWSCRAPE_USERNAME` (and friends) are set in the environment, add
+    that account to the twscrape pool — but only if it isn't already there.
+
+    This means a user can deploy the app with the four env vars
+    set and skip running the `twscrape add_accounts` CLI by hand.
+    """
+    username = os.getenv("X_TWSCRAPE_USERNAME", "").strip()
+    password = os.getenv("X_TWSCRAPE_PASSWORD", "").strip()
+    email = os.getenv("X_TWSCRAPE_EMAIL", "").strip()
+    email_password = os.getenv("X_TWSCRAPE_EMAIL_PASSWORD", "").strip()
+
+    if not (username and password and email and email_password):
+        return
+
+    accounts = await api.pool.accounts_info()
+    if any(a.get("username", "").lower() == username.lower() for a in accounts):
+        logger.info("Account @{} already in pool — skipping add.", username)
+        return
+
+    try:
+        await api.pool.add_account(username, password, email, email_password)
+        logger.info("Added @{} to twscrape pool from env vars.", username)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Failed to add @{} from env: {}", username, e)
+
+
 async def init_scraper() -> None:
     """
     Called from FastAPI's startup event.
 
+    - Auto-adds an account from env vars if provided.
     - Logs in any accounts that have not been logged in yet.
     - Verifies at least one active account exists.
     """
     logger.info("Initializing twscrape (db={})...", _DB_PATH)
+
+    await _maybe_add_account_from_env()
 
     try:
         await api.pool.login_all()
@@ -121,7 +152,9 @@ async def init_scraper() -> None:
 
     if not active:
         logger.warning(
-            "No active twscrape accounts! Add one with:\n"
+            "No active twscrape accounts! Either set "
+            "X_TWSCRAPE_USERNAME / PASSWORD / EMAIL / EMAIL_PASSWORD env vars, "
+            "or run:\n"
             "  twscrape add_accounts accounts.txt username:password:email:email_password\n"
             "  twscrape login_accounts"
         )
