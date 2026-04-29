@@ -77,7 +77,7 @@
     toneSelect.disabled = on;
     lengthSelect.disabled = on;
     btnLabel.classList.toggle('hidden', on);
-    btnSpinner.classList.toggle('hidden', on);
+    btnSpinner.classList.toggle('hidden', !on);
     btnSpinner.classList.toggle('inline-flex', on);
   };
 
