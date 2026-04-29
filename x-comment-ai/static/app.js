@@ -2,7 +2,7 @@
 // Vanilla JS controller for X Comment AI (bulk-enabled).
 //
 // Features:
-// - Bulk URL input (one per line, up to 50)
+// - Bulk URL input (one per line, up to 200; soft warn above 100)
 // - Concurrency-capped parallel /generate calls (cap = 5)
 // - Per-post card with author + clickable "View on X" + variants
 // - Per-post Regenerate (calls /regenerate, no re-scrape)
@@ -32,6 +32,12 @@
   const results      = $('results');
   const postsList    = $('posts-list');
 
+  const failedWrap   = $('failed-wrap');
+  const failedList   = $('failed-list');
+  const failedCount  = $('failed-count');
+  const failedPlural = $('failed-plural');
+  const failedCopy   = $('failed-copy');
+
   const progressWrap  = $('progress-wrap');
   const progressDone  = $('progress-done');
   const progressTotal = $('progress-total');
@@ -53,7 +59,8 @@
   const HISTORY_LIMIT = 10;
   const X_LIMIT = 280;
   const X_WARN  = 240;
-  const MAX_URLS = 50;
+  const MAX_URLS = 200;
+  const SOFT_WARN_URLS = 100;
   const CONCURRENCY = 5;
   const URL_RE = /(?:x\.com|twitter\.com)\/[^/]+\/status\/\d+/i;
 
@@ -90,10 +97,27 @@
     showToast._t = setTimeout(() => toast.classList.add('hidden'), 1600);
   };
 
-  const buildReplyUrl = (text, tweetId) => {
-    const params = new URLSearchParams({ text: text || '' });
-    if (tweetId) params.set('in_reply_to', String(tweetId));
-    return `https://x.com/intent/post?${params.toString()}`;
+  // Copy text to clipboard. Returns true on success.
+  const copyToClipboard = async (txt) => {
+    if (!txt) return false;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(txt);
+        return true;
+      }
+      const ta = document.createElement('textarea');
+      ta.value = txt;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
   };
 
   // ---------- URL parsing ----------
@@ -114,7 +138,20 @@
 
   const updateUrlCount = () => {
     const urls = parseUrls(urlsInput.value);
-    urlCount.textContent = `${urls.length} URL${urls.length === 1 ? '' : 's'}`;
+    let label = `${urls.length} URL${urls.length === 1 ? '' : 's'}`;
+    if (urls.length > MAX_URLS) {
+      label += ` — too many (max ${MAX_URLS})`;
+      urlCount.classList.add('text-rose-400');
+      urlCount.classList.remove('text-amber-300', 'text-slate-500');
+    } else if (urls.length > SOFT_WARN_URLS) {
+      label += ' — large batch, will take a while';
+      urlCount.classList.add('text-amber-300');
+      urlCount.classList.remove('text-rose-400', 'text-slate-500');
+    } else {
+      urlCount.classList.add('text-slate-500');
+      urlCount.classList.remove('text-rose-400', 'text-amber-300');
+    }
+    urlCount.textContent = label;
     btnLabelText.textContent = urls.length > 1
       ? `Generate Comments for ${urls.length} posts`
       : 'Generate Comments';
@@ -128,7 +165,7 @@
     counterEl.classList.toggle('danger', len > X_LIMIT);
   };
 
-  const renderVariant = (text, idx, getTweetId) => {
+  const renderVariant = (text, idx, getPostMeta) => {
     const node = variantTpl.content.firstElementChild.cloneNode(true);
 
     const badge   = node.querySelector('.variant-badge');
@@ -142,8 +179,12 @@
     textEl.textContent = text;
     updateCounter(counter, text.length);
 
+    // "Reply on X" now opens the actual post URL (so user lands on the
+    // comment section) and silently copies the variant text to the
+    // clipboard so they can paste it into the X reply box.
     const refreshReply = () => {
-      replyBtn.href = buildReplyUrl(textEl.textContent || '', getTweetId());
+      const meta = getPostMeta() || {};
+      replyBtn.href = meta.url || '#';
     };
     refreshReply();
 
@@ -152,29 +193,29 @@
       refreshReply();
     });
 
+    replyBtn.addEventListener('click', async (e) => {
+      const meta = getPostMeta() || {};
+      const txt = textEl.textContent || '';
+      // Don't block the new-tab navigation on clipboard write — fire and
+      // forget. We DO want to mark this variant as 'used' in history.
+      copyToClipboard(txt).then((ok) => {
+        if (ok) showToast('Reply copied — paste it on X');
+      });
+      markUsed(meta.tweet_id, txt);
+      // Anchor's target=_blank handles the navigation natively.
+    });
+
     copyBtn.addEventListener('click', async () => {
       const txt = textEl.textContent || '';
       if (!txt.trim()) return;
-      try {
-        if (navigator.clipboard && window.isSecureContext) {
-          await navigator.clipboard.writeText(txt);
-        } else {
-          const ta = document.createElement('textarea');
-          ta.value = txt;
-          ta.setAttribute('readonly', '');
-          ta.style.position = 'fixed';
-          ta.style.opacity = '0';
-          document.body.appendChild(ta);
-          ta.select();
-          document.execCommand('copy');
-          document.body.removeChild(ta);
-        }
+      const ok = await copyToClipboard(txt);
+      if (ok) {
         copyLbl.textContent = 'Copied!';
         showToast('Copied to clipboard');
         setTimeout(() => { copyLbl.textContent = 'Copy'; }, 1600);
-        markUsed(getTweetId(), txt);
-      } catch (err) {
-        console.error(err);
+        const meta = getPostMeta() || {};
+        markUsed(meta.tweet_id, txt);
+      } else {
         showError('Could not copy automatically. Please select and copy manually.');
       }
     });
@@ -224,6 +265,11 @@
       statusText.classList.toggle('text-slate-400', state !== 'error');
     };
 
+    const getPostMeta = () => ({
+      tweet_id: postData?.tweet_id,
+      url: postData?.url || url,
+    });
+
     const renderResult = (data) => {
       postData = data;
       authorName.textContent = data.author_name || data.author || '';
@@ -232,7 +278,7 @@
       textEl.textContent = truncate(data.original || '', MAX_POST_PREVIEW);
       variantsEl.innerHTML = '';
       (data.variants || []).forEach((v, i) => {
-        variantsEl.appendChild(renderVariant(v, i, () => postData?.tweet_id));
+        variantsEl.appendChild(renderVariant(v, i, getPostMeta));
       });
       regenBtn.classList.remove('hidden');
     };
@@ -253,7 +299,7 @@
         postData = { ...postData, variants: data.variants || [] };
         variantsEl.innerHTML = '';
         (data.variants || []).forEach((v, i) => {
-          variantsEl.appendChild(renderVariant(v, i, () => postData?.tweet_id));
+          variantsEl.appendChild(renderVariant(v, i, getPostMeta));
         });
         pushHistory({ ...postData, at: Date.now() });
       } catch (err) {
@@ -265,8 +311,60 @@
       }
     });
 
-    return { node, setStatus, renderResult, getData: () => postData };
+    return { node, setStatus, renderResult, getData: () => postData, url };
   };
+
+  // ---------- failed-links summary ----------
+  const failed = []; // [{ url, msg }]
+
+  const renderFailed = () => {
+    failedCount.textContent = String(failed.length);
+    failedPlural.textContent = failed.length === 1 ? '' : 's';
+    if (failed.length === 0) {
+      failedWrap.classList.add('hidden');
+      failedList.innerHTML = '';
+      return;
+    }
+    failedWrap.classList.remove('hidden');
+    failedList.innerHTML = '';
+    failed.forEach(({ url, msg }) => {
+      const li = document.createElement('li');
+      li.className = 'rounded-lg border border-rose-500/20 bg-rose-950/20 px-3 py-2 space-y-1';
+      const top = document.createElement('div');
+      top.className = 'flex items-start justify-between gap-3';
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = url;
+      a.className = 'text-rose-200 hover:text-rose-100 underline-offset-4 hover:underline truncate text-xs sm:text-sm font-mono min-w-0';
+      const reason = document.createElement('p');
+      reason.className = 'text-xs text-rose-300/80 leading-snug';
+      reason.textContent = msg || 'Failed';
+      top.appendChild(a);
+      li.appendChild(top);
+      li.appendChild(reason);
+      failedList.appendChild(li);
+    });
+  };
+
+  const addFailed = (url, msg) => {
+    failed.push({ url, msg });
+    renderFailed();
+  };
+
+  const resetFailed = () => {
+    failed.length = 0;
+    renderFailed();
+  };
+
+  failedCopy.addEventListener('click', async (e) => {
+    e.preventDefault();
+    if (failed.length === 0) return;
+    const text = failed.map((f) => f.url).join('\n');
+    const ok = await copyToClipboard(text);
+    showToast(ok ? `Copied ${failed.length} URL${failed.length === 1 ? '' : 's'}` : 'Copy failed');
+  });
 
   // ---------- history (localStorage) ----------
   const loadHistory = () => {
@@ -407,7 +505,9 @@
         okCount++;
       } catch (err) {
         console.error(url, err);
-        card.setStatus('error', err.message || 'Failed');
+        const msg = err.message || 'Failed';
+        card.setStatus('error', msg);
+        addFailed(url, msg);
         errCount++;
       } finally {
         done++;
@@ -447,6 +547,7 @@
 
     setLoading(true);
     postsList.innerHTML = '';
+    resetFailed();
     results.classList.remove('hidden');
     results.scrollIntoView({ behavior: 'smooth', block: 'start' });
 

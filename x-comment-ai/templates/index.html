@@ -55,7 +55,7 @@
         </span>
       </h1>
       <p class="mt-3 text-slate-400 text-base sm:text-lg">
-        Paste up to 50 X post links (one per line) — get 3 perfect, engaging replies for each.
+        Paste up to 200 X post links (one per line) — get 3 perfect, engaging replies for each.
       </p>
     </header>
 
@@ -68,7 +68,7 @@
         </div>
         <textarea
           id="urls" name="urls" required autocomplete="off" spellcheck="false" rows="6"
-          placeholder="https://x.com/username/status/1234567890&#10;https://x.com/another/status/9876543210&#10;https://x.com/..."
+          placeholder="https://x.com/username/status/1234567890&#10;https://x.com/another/status/9876543210&#10;Paste up to 200 X post URLs (one per line)"
           class="w-full rounded-xl bg-ink-800/80 border border-white/10 px-3 py-3 text-slate-100 placeholder:text-slate-500 outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition font-mono text-sm leading-relaxed"
         ></textarea>
 
@@ -136,6 +136,21 @@
           <div id="progress-fill" class="h-full bg-gradient-to-r from-sky-500 to-fuchsia-500 transition-all duration-300" style="width: 0%"></div>
         </div>
       </div>
+
+      <!-- Failed-links summary (populated as failures happen) -->
+      <details id="failed-wrap" class="hidden rounded-xl border border-rose-500/30 bg-rose-950/30 backdrop-blur-xl p-4" open>
+        <summary class="flex items-center justify-between gap-3 cursor-pointer select-none">
+          <span class="flex items-center gap-2 text-sm text-rose-300">
+            <span class="inline-block h-2 w-2 rounded-full bg-rose-500"></span>
+            <span><span id="failed-count">0</span> link<span id="failed-plural">s</span> failed</span>
+          </span>
+          <button type="button" id="failed-copy"
+            class="inline-flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 px-3 py-1.5 text-xs transition">
+            Copy failed URLs
+          </button>
+        </summary>
+        <ul id="failed-list" class="mt-3 space-y-2 text-sm"></ul>
+      </details>
 
       <!-- One post block per URL, populated by JS -->
       <div id="posts-list" class="space-y-6"></div>
