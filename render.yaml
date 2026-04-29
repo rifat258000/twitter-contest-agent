@@ -1,0 +1,64 @@
+# Render Blueprint for RIFAT < AI
+# Docs: https://render.com/docs/blueprint-spec
+#
+# How to use:
+#   1. Sign up / log in at https://render.com
+#   2. New + → Blueprint → connect this GitHub repo
+#   3. Render finds this file and creates the web service
+#   4. Set the secret env vars (marked sync: false below) in the dashboard
+#   5. Click Deploy
+#
+# Free tier note: persistent disks are paid-only. The twscrape SQLite DB
+# at /data/accounts.db is ephemeral on free tier and gets rebuilt from
+# the X_AUTH_TOKEN / X_CT0 / X_TWSCRAPE_USERNAME env vars on every cold
+# start. To upgrade to a persistent disk later, add the `disk:` block
+# (commented out at the bottom) and switch the plan to `starter`.
+
+services:
+  - type: web
+    name: rifat-ai
+    runtime: docker
+    repo: https://github.com/rifat258000/twitter-contest-agent
+    branch: devin/1777467860-x-comment-ai
+    rootDir: x-comment-ai
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Render sets PORT itself; uvicorn picks it up via $PORT.
+      - key: APP_PORT
+        value: 10000
+      # Twscrape DB path — ephemeral on free tier, persistent if you add a disk.
+      - key: TWSCRAPE_DB_PATH
+        value: /data/accounts.db
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+
+      # ---- Secrets — set these in the Render dashboard (Environment tab) ----
+      # sync: false means Render will NOT pull these from this YAML; you
+      # paste them once in the UI and they're encrypted.
+      - key: GROQ_API_KEY
+        sync: false
+      - key: X_AUTH_TOKEN
+        sync: false
+      - key: X_CT0
+        sync: false
+      - key: X_TWSCRAPE_USERNAME
+        sync: false
+      - key: X_TWSCRAPE_PASSWORD
+        sync: false
+      - key: X_TWSCRAPE_EMAIL
+        sync: false
+      - key: X_TWSCRAPE_EMAIL_PASSWORD
+        sync: false
+
+    # ---- Optional: persistent disk for paid plan ----
+    # Uncomment + switch plan to `starter` ($7/mo) to keep the twscrape
+    # DB across restarts (saves ~5s of cold-start re-login).
+    #
+    # disk:
+    #   name: twscrape-data
+    #   mountPath: /data
+    #   sizeGB: 1
