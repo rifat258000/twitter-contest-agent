@@ -965,12 +965,9 @@
     } catch { /* ignore */ }
   });
 
-  // Cmd/Ctrl + Enter submits from anywhere
-  document.addEventListener('keydown', (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      form.requestSubmit();
-    }
-  });
+  // (Cmd/Ctrl+Enter submit is wired up in the keyboard-shortcuts block
+  //  below — alongside Cmd/Ctrl+1/2 and ?, so all modifier shortcuts share
+  //  one preventDefault path.)
 
   // Initial paint
   updateUrlCount();
