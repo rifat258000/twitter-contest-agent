@@ -31,8 +31,11 @@ def _patch_xclid_client_with_cookies() -> None:
 
     Sending an authenticated session cookie bypasses the challenge.
     """
-    auth_token = os.getenv("X_AUTH_TOKEN", "").strip()
-    ct0 = os.getenv("X_CT0", "").strip()
+    # Take only the first whitespace-delimited token. Pasted secrets sometimes
+    # carry trailing whitespace + concatenated values from imprecise selection;
+    # X rejects those with HTTP 353 (csrf mismatch).
+    auth_token = (os.getenv("X_AUTH_TOKEN", "").split() or [""])[0]
+    ct0 = (os.getenv("X_CT0", "").split() or [""])[0]
     if not auth_token:
         return
 
@@ -234,8 +237,8 @@ async def _maybe_add_account_from_env() -> None:
     email = os.getenv("X_TWSCRAPE_EMAIL", "").strip() or f"{username}@example.com"
     email_password = os.getenv("X_TWSCRAPE_EMAIL_PASSWORD", "").strip() or "x"
 
-    auth_token = os.getenv("X_AUTH_TOKEN", "").strip()
-    ct0 = os.getenv("X_CT0", "").strip()
+    auth_token = (os.getenv("X_AUTH_TOKEN", "").split() or [""])[0]
+    ct0 = (os.getenv("X_CT0", "").split() or [""])[0]
     cookies_str: str | None = None
     if auth_token and ct0:
         cookies_str = f"auth_token={auth_token}; ct0={ct0}"
