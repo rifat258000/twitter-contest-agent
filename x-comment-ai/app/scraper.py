@@ -283,7 +283,15 @@ async def _maybe_add_account_from_env() -> None:
             try:
                 await api.pool.delete_accounts(username)
             except Exception as e:  # noqa: BLE001
-                logger.warning("Failed to delete @{}: {}", username, e)
+                # Falling through to add_account would hit a duplicate-username
+                # DB error and leave the stale account in place. Bail instead;
+                # the user can retry once the underlying delete issue is fixed.
+                logger.warning(
+                    "Failed to delete @{} during cookie refresh, skipping re-add: {}",
+                    username,
+                    e,
+                )
+                return
         else:
             logger.info(
                 "Account @{} already in pool (active={}) — skipping add.",

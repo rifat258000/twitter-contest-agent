@@ -55,27 +55,22 @@
         </span>
       </h1>
       <p class="mt-3 text-slate-400 text-base sm:text-lg">
-        Paste any X post link — get 3 perfect, engaging replies in seconds.
+        Paste up to 50 X post links (one per line) — get 3 perfect, engaging replies for each.
       </p>
     </header>
 
     <!-- Input card -->
     <section class="rounded-2xl border border-white/10 bg-ink-900/60 backdrop-blur-xl shadow-glow p-5 sm:p-7">
       <form id="generate-form" class="space-y-4" novalidate>
-        <label for="url" class="block text-sm font-medium text-slate-300">X post URL</label>
-        <div class="relative">
-          <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-500">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 1 0-7.07-7.07l-1.5 1.5"/>
-              <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 1 0 7.07 7.07l1.5-1.5"/>
-            </svg>
-          </span>
-          <input
-            id="url" name="url" type="url" required autocomplete="off" spellcheck="false"
-            placeholder="https://x.com/username/status/1234567890"
-            class="w-full rounded-xl bg-ink-800/80 border border-white/10 pl-10 pr-3 py-3.5 text-slate-100 placeholder:text-slate-500 outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition"
-          />
+        <div class="flex items-center justify-between">
+          <label for="urls" class="block text-sm font-medium text-slate-300">X post URLs <span class="text-slate-500 font-normal">(one per line)</span></label>
+          <span id="url-count" class="text-xs text-slate-500">0 URLs</span>
         </div>
+        <textarea
+          id="urls" name="urls" required autocomplete="off" spellcheck="false" rows="6"
+          placeholder="https://x.com/username/status/1234567890&#10;https://x.com/another/status/9876543210&#10;https://x.com/..."
+          class="w-full rounded-xl bg-ink-800/80 border border-white/10 px-3 py-3 text-slate-100 placeholder:text-slate-500 outline-none focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition font-mono text-sm leading-relaxed"
+        ></textarea>
 
         <!-- Selectors row -->
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -115,7 +110,7 @@
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="m12 3 1.9 5.8L20 11l-5.8 1.9L12 19l-1.9-6.1L4 11l6.1-2.2z"/>
             </svg>
-            Generate 3 Comments
+            <span id="btn-label-text">Generate Comments</span>
           </span>
           <span id="btn-spinner" class="hidden items-center gap-2">
             <span class="spinner"></span>
@@ -131,49 +126,19 @@
 
     <!-- Results -->
     <section id="results" class="hidden mt-8 space-y-6">
-
-      <!-- Original post -->
-      <article class="rounded-2xl border border-white/10 bg-ink-900/60 backdrop-blur-xl p-5 sm:p-6">
-        <header class="flex items-center justify-between gap-3 mb-3">
-          <div class="flex items-center gap-3 min-w-0">
-            <div class="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-sky-400 to-fuchsia-500"></div>
-            <div class="min-w-0">
-              <p id="post-author-name" class="font-semibold truncate"></p>
-              <p id="post-author-handle" class="text-sm text-slate-400 truncate"></p>
-            </div>
-          </div>
-          <a id="post-link" href="#" target="_blank" rel="noopener noreferrer"
-             class="text-xs sm:text-sm text-accent-400 hover:text-accent-500 underline-offset-4 hover:underline">
-            View on X ↗
-          </a>
-        </header>
-
-        <p id="post-text" class="whitespace-pre-wrap text-slate-200 leading-relaxed text-[15px]"></p>
-
-        <details id="thread-wrap" class="hidden mt-3 text-sm text-slate-400">
-          <summary class="cursor-pointer hover:text-slate-200">Show conversation context</summary>
-          <ul id="thread-list" class="mt-2 space-y-2 border-l border-white/10 pl-3"></ul>
-        </details>
-      </article>
-
-      <!-- Variants header -->
-      <div class="flex items-center justify-between">
-        <h2 class="text-sm font-semibold uppercase tracking-wider text-accent-400">
-          Your AI comments
-        </h2>
-        <button
-          id="regenerate-btn" type="button"
-          class="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 px-3 py-1.5 text-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>
-          </svg>
-          <span id="regen-label">Regenerate</span>
-        </button>
+      <!-- Bulk progress bar -->
+      <div id="progress-wrap" class="hidden rounded-xl border border-white/10 bg-ink-900/60 backdrop-blur-xl p-4">
+        <div class="flex items-center justify-between text-sm text-slate-300 mb-2">
+          <span><span id="progress-done">0</span> / <span id="progress-total">0</span> posts processed</span>
+          <span id="progress-stats" class="text-xs text-slate-500"></span>
+        </div>
+        <div class="h-1.5 w-full rounded-full bg-white/5 overflow-hidden">
+          <div id="progress-fill" class="h-full bg-gradient-to-r from-sky-500 to-fuchsia-500 transition-all duration-300" style="width: 0%"></div>
+        </div>
       </div>
 
-      <!-- Variants grid -->
-      <div id="variants" class="grid grid-cols-1 gap-4"></div>
+      <!-- One post block per URL, populated by JS -->
+      <div id="posts-list" class="space-y-6"></div>
     </section>
 
     <!-- History (sibling of #results so it's reachable on first page load) -->
@@ -190,6 +155,47 @@
       <span class="block sm:inline sm:ml-2">Use responsibly.</span>
     </footer>
   </main>
+
+  <!-- Post block template: one per URL submitted -->
+  <template id="post-template">
+    <section class="post-block rounded-2xl border border-white/10 bg-ink-900/60 backdrop-blur-xl p-5 sm:p-6 space-y-4">
+      <!-- Original post header -->
+      <article>
+        <header class="flex items-center justify-between gap-3 mb-3">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-sky-400 to-fuchsia-500"></div>
+            <div class="min-w-0">
+              <p class="post-author-name font-semibold truncate"></p>
+              <p class="post-author-handle text-sm text-slate-400 truncate"></p>
+            </div>
+          </div>
+          <a class="post-link text-xs sm:text-sm text-accent-400 hover:text-accent-500 underline-offset-4 hover:underline"
+             href="#" target="_blank" rel="noopener noreferrer">
+            View on X ↗
+          </a>
+        </header>
+        <p class="post-text whitespace-pre-wrap text-slate-200 leading-relaxed text-[15px]"></p>
+      </article>
+
+      <!-- Status row: pending / loading / error / done -->
+      <div class="post-status flex items-center justify-between gap-3 border-t border-white/5 pt-4">
+        <div class="flex items-center gap-2 text-sm">
+          <span class="post-status-icon"></span>
+          <span class="post-status-text text-slate-400"></span>
+        </div>
+        <button type="button"
+          class="post-regen-btn hidden inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 px-3 py-1.5 text-sm transition disabled:opacity-50 disabled:cursor-not-allowed">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>
+          </svg>
+          <span class="post-regen-label">Regenerate</span>
+        </button>
+      </div>
+
+      <!-- Variants for this post -->
+      <div class="post-variants grid grid-cols-1 gap-4"></div>
+    </section>
+  </template>
 
   <!-- Variant template (cloned by JS) -->
   <template id="variant-template">
