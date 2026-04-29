@@ -99,28 +99,82 @@ api: API = API(_DB_PATH)
 
 async def _maybe_add_account_from_env() -> None:
     """
-    If `X_TWSCRAPE_USERNAME` (and friends) are set in the environment, add
-    that account to the twscrape pool — but only if it isn't already there.
+    Add an X account to the twscrape pool from environment variables.
 
-    This means a user can deploy the app with the four env vars
-    set and skip running the `twscrape add_accounts` CLI by hand.
+    Two ways to provide credentials:
+    1. Cookies (preferred for cloud deploys — bypasses Cloudflare login wall):
+         X_TWSCRAPE_USERNAME, X_AUTH_TOKEN, X_CT0
+       (X_TWSCRAPE_PASSWORD/EMAIL/EMAIL_PASSWORD are optional fallback for
+       password-based re-login if cookies expire.)
+
+    2. Username/password:
+         X_TWSCRAPE_USERNAME, X_TWSCRAPE_PASSWORD,
+         X_TWSCRAPE_EMAIL, X_TWSCRAPE_EMAIL_PASSWORD
+       (only works from non-blocked IPs — Cloudflare blocks most clouds.)
+
+    If both `X_AUTH_TOKEN` and `X_CT0` are present, the account is added with
+    cookies and immediately marked active — no login attempt is made.
+
+    If the account already exists in the pool with no cookies but env now
+    provides cookies, the existing account is deleted and re-added so the
+    cookies take effect.
     """
     username = os.getenv("X_TWSCRAPE_USERNAME", "").strip()
-    password = os.getenv("X_TWSCRAPE_PASSWORD", "").strip()
-    email = os.getenv("X_TWSCRAPE_EMAIL", "").strip()
-    email_password = os.getenv("X_TWSCRAPE_EMAIL_PASSWORD", "").strip()
-
-    if not (username and password and email and email_password):
+    if not username:
         return
+
+    password = os.getenv("X_TWSCRAPE_PASSWORD", "").strip() or "x"
+    email = os.getenv("X_TWSCRAPE_EMAIL", "").strip() or f"{username}@example.com"
+    email_password = os.getenv("X_TWSCRAPE_EMAIL_PASSWORD", "").strip() or "x"
+
+    auth_token = os.getenv("X_AUTH_TOKEN", "").strip()
+    ct0 = os.getenv("X_CT0", "").strip()
+    cookies_str: str | None = None
+    if auth_token and ct0:
+        cookies_str = f"auth_token={auth_token}; ct0={ct0}"
+    elif auth_token:
+        # auth_token alone won't auto-activate, but we still try.
+        cookies_str = f"auth_token={auth_token}"
+        logger.warning(
+            "Only X_AUTH_TOKEN provided (no X_CT0). Account will be added but "
+            "may not be marked active until ct0 is also supplied."
+        )
 
     accounts = await api.pool.accounts_info()
-    if any(a.get("username", "").lower() == username.lower() for a in accounts):
-        logger.info("Account @{} already in pool — skipping add.", username)
-        return
+    existing = next(
+        (a for a in accounts if a.get("username", "").lower() == username.lower()),
+        None,
+    )
+
+    if existing:
+        # If we now have cookies but the existing account has no cookies, replace it.
+        if cookies_str and not existing.get("active"):
+            logger.info("Replacing inactive @{} with cookie-based account.", username)
+            try:
+                await api.pool.delete_accounts(username)
+            except Exception as e:  # noqa: BLE001
+                logger.warning("Failed to delete @{}: {}", username, e)
+        else:
+            logger.info(
+                "Account @{} already in pool (active={}) — skipping add.",
+                username,
+                existing.get("active"),
+            )
+            return
 
     try:
-        await api.pool.add_account(username, password, email, email_password)
-        logger.info("Added @{} to twscrape pool from env vars.", username)
+        await api.pool.add_account(
+            username,
+            password,
+            email,
+            email_password,
+            cookies=cookies_str,
+        )
+        logger.info(
+            "Added @{} to twscrape pool from env vars (cookies={}).",
+            username,
+            "yes" if cookies_str else "no",
+        )
     except Exception as e:  # noqa: BLE001
         logger.warning("Failed to add @{} from env: {}", username, e)
 
