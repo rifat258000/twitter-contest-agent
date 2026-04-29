@@ -135,7 +135,7 @@ Response:
 ```json
 {
   "url": "...",
-  "tweet_id": 1234567890,
+  "tweet_id": "1234567890",
   "author": "@elonmusk",
   "author_name": "Elon Musk",
   "original": "...",

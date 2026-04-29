@@ -87,7 +87,7 @@ class RegenerateRequest(BaseModel):
 
 class GenerateResponse(BaseModel):
     url: str
-    tweet_id: int
+    tweet_id: str
     author: str
     author_name: str
     original: str
@@ -160,7 +160,7 @@ async def generate(payload: GenerateRequest):
 
     return GenerateResponse(
         url=tweet.url,
-        tweet_id=tweet.id,
+        tweet_id=str(tweet.id),
         author=tweet.author,
         author_name=tweet.author_name,
         original=tweet.text,
