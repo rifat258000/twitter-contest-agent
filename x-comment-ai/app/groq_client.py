@@ -33,6 +33,13 @@ DEFAULT_REPLY_LANG = os.getenv("DEFAULT_REPLY_LANG", "auto").lower()
 # Tones & lengths
 # ---------------------------------------------------------------------------
 TONES: dict[str, str] = {
+    "human":      (
+        "Sound like a real person who just tapped out a quick reply on their phone. "
+        "Write almost entirely in lowercase. Use contractions ('it's', 'i'm', 'gonna', 'idk', 'ngl', 'tbh'). "
+        "Skip ending punctuation often. No emojis. No hashtags. No corporate or marketing words. "
+        "It can be a fragment, a half-thought, or a casual aside — not a polished sentence. "
+        "Avoid being clever or trying too hard; just react naturally like you're texting a friend."
+    ),
     "witty":      "Be witty and clever. A subtle joke or a sharp observation.",
     "supportive": "Be warm, supportive, and encouraging. Sound like a friend cheering them on.",
     "sarcastic": "Be playfully sarcastic — light teasing, never mean. Match the post's energy.",
