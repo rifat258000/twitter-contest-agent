@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+accounts/accounts.db
+accounts/*.db
+.git/
+.gitignore
+.DS_Store
+test-plan.md
+test-report.md
