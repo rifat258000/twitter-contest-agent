@@ -61,7 +61,9 @@
   const X_WARN  = 240;
   const MAX_URLS = 200;
   const SOFT_WARN_URLS = 100;
-  const CONCURRENCY = 5;
+  // 3 URLs * 3 variants = 9 in-flight Groq calls peak, well under the
+  // free-tier 30 RPM ceiling. Keeps bulk batches reliable.
+  const CONCURRENCY = 3;
   const URL_RE = /(?:x\.com|twitter\.com)\/[^/]+\/status\/\d+/i;
 
   // ---------- helpers ----------

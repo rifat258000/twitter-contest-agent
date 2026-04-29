@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 from typing import Iterable, Optional
 
 from groq import APIError, AsyncGroq, RateLimitError
@@ -180,6 +181,47 @@ def _clean_reply(text: str, max_chars: int = 280) -> str:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+_RETRY_AFTER_SECS_RE = re.compile(r"try again in\s+([0-9.]+)\s*s", re.IGNORECASE)
+
+
+def _retry_after_seconds(err: RateLimitError, attempt: int) -> float:
+    """
+    Decide how long to sleep before retrying a Groq 429.
+
+    Priority:
+      1. `Retry-After` HTTP header (seconds, integer).
+      2. "Please try again in <X>s" hint inside the error body/message.
+      3. Exponential backoff: 1s, 2s, 4s, 8s.
+
+    Capped at 30s so a single 429 can't stall a request indefinitely.
+    """
+    fallback = min(30.0, 2.0 ** attempt)
+
+    resp = getattr(err, "response", None)
+    if resp is not None:
+        try:
+            ra = resp.headers.get("retry-after")
+            if ra:
+                return min(30.0, max(0.5, float(ra)))
+        except (TypeError, ValueError, AttributeError):
+            pass
+
+    # Groq error body usually includes "Please try again in 12.345s"
+    text = ""
+    body = getattr(err, "body", None)
+    if isinstance(body, dict):
+        text = str(body.get("error", body)) or ""
+    text = text or str(err) or ""
+    m = _RETRY_AFTER_SECS_RE.search(text)
+    if m:
+        try:
+            return min(30.0, max(0.5, float(m.group(1))))
+        except ValueError:
+            pass
+
+    return fallback
+
+
 async def _one_call(
     post_text: str,
     thread: Optional[Iterable[str]],
@@ -194,26 +236,47 @@ async def _one_call(
     )
     max_chars = LENGTHS.get(length, LENGTHS["medium"])[0]
 
-    try:
-        resp = await client.chat.completions.create(
-            model=GROQ_MODEL,
-            temperature=temperature,
-            max_tokens=GROQ_MAX_TOKENS,
-            top_p=0.95,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-        )
-    except RateLimitError as e:
-        logger.warning("Groq rate-limited: {}", e)
-        raise GroqError("Groq is rate-limiting us. Please try again in a moment.") from e
-    except APIError as e:
-        logger.exception("Groq API error")
-        raise GroqError(f"Groq API error: {e}") from e
-    except Exception as e:  # noqa: BLE001
-        logger.exception("Unexpected Groq failure")
-        raise GroqError(f"Unexpected Groq failure: {e}") from e
+    # Retry on Groq 429s, honoring Retry-After when the client surfaces it.
+    # Free-tier hits ~30 RPM; bursts of bulk requests sometimes overshoot.
+    max_attempts = 4
+    last_429: Optional[RateLimitError] = None
+    resp = None
+    for attempt in range(max_attempts):
+        try:
+            resp = await client.chat.completions.create(
+                model=GROQ_MODEL,
+                temperature=temperature,
+                max_tokens=GROQ_MAX_TOKENS,
+                top_p=0.95,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+            )
+            break
+        except RateLimitError as e:
+            last_429 = e
+            wait = _retry_after_seconds(e, attempt)
+            if attempt + 1 >= max_attempts:
+                logger.warning("Groq rate-limited (gave up after {} tries): {}", attempt + 1, e)
+                raise GroqError(
+                    f"Groq rate limit hit and retries exhausted (waited up to {wait:.1f}s). "
+                    "Try again in a minute."
+                ) from e
+            logger.info("Groq 429 (attempt {}/{}); sleeping {:.1f}s", attempt + 1, max_attempts, wait)
+            await asyncio.sleep(wait)
+        except APIError as e:
+            logger.exception("Groq API error")
+            raise GroqError(f"Groq API error: {e}") from e
+        except Exception as e:  # noqa: BLE001
+            logger.exception("Unexpected Groq failure")
+            raise GroqError(f"Unexpected Groq failure: {e}") from e
+
+    if resp is None:
+        # Defensive — loop should have either broken out or raised.
+        raise GroqError(
+            "Groq rate limit hit and retries exhausted. Try again in a minute."
+        ) from last_429
 
     if not resp.choices:
         raise GroqError("Groq returned no choices.")
