@@ -11,10 +11,12 @@ Tier-1 enhancements:
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
-from typing import Iterable, Optional
+from typing import AsyncIterator, Iterable, Optional
 
+import httpx
 from groq import APIError, AsyncGroq, RateLimitError
 from loguru import logger
 
@@ -32,6 +34,17 @@ GROQ_VISION_MODEL = os.getenv(
     "GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct"
 ).strip()
 GROQ_OCR_MAX_TOKENS = int(os.getenv("GROQ_OCR_MAX_TOKENS", "2048"))
+
+# Optional fallback providers — if Groq is rate-limited or out of quota, the
+# chat endpoint will transparently retry on the next provider in this order.
+GROQ_API_KEY_2 = os.getenv("GROQ_API_KEY_2", "").strip()
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
+OPENROUTER_MODEL = os.getenv(
+    "OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free"
+).strip()
+GROQ_CHAT_MODEL = os.getenv("GROQ_CHAT_MODEL", "").strip() or GROQ_MODEL
+GROQ_CHAT_MAX_TOKENS = int(os.getenv("GROQ_CHAT_MAX_TOKENS", "1024"))
+GROQ_CHAT_TEMPERATURE = float(os.getenv("GROQ_CHAT_TEMPERATURE", "0.7"))
 
 
 # ---------------------------------------------------------------------------
@@ -607,3 +620,165 @@ async def extract_text_from_image(
     if text.upper() == "NONE":
         return ""
     return text
+
+
+# ---------------------------------------------------------------------------
+# Chat — multi-provider streaming with automatic fallback
+# ---------------------------------------------------------------------------
+CHAT_SYSTEM_DEFAULT = (
+    "You are a helpful AI assistant inside the RIFAT < AI app. "
+    "Be concise, friendly, and direct. Skip filler ('Sure!', 'Of course!'). "
+    "Use markdown headings/lists only when they meaningfully aid clarity. "
+    "If the user asks you to draft a reply for an X/Twitter post, keep it "
+    "natural, under 280 characters, no emojis unless requested, and never "
+    "use corporate marketing words."
+)
+
+
+def _chat_providers() -> list[tuple[str, str, str]]:
+    """Build the ordered list of (name, api_key, model) for chat fallback."""
+    out: list[tuple[str, str, str]] = []
+    if GROQ_API_KEY:
+        out.append(("groq", GROQ_API_KEY, GROQ_CHAT_MODEL))
+    if GROQ_API_KEY_2:
+        out.append(("groq2", GROQ_API_KEY_2, GROQ_CHAT_MODEL))
+    if OPENROUTER_API_KEY:
+        out.append(("openrouter", OPENROUTER_API_KEY, OPENROUTER_MODEL))
+    return out
+
+
+async def _stream_groq(
+    api_key: str, model: str, messages: list[dict],
+) -> AsyncIterator[str]:
+    client = AsyncGroq(api_key=api_key)
+    stream = await client.chat.completions.create(
+        model=model,
+        messages=messages,
+        stream=True,
+        max_tokens=GROQ_CHAT_MAX_TOKENS,
+        temperature=GROQ_CHAT_TEMPERATURE,
+    )
+    async for chunk in stream:
+        try:
+            delta = chunk.choices[0].delta.content
+        except (AttributeError, IndexError):
+            delta = None
+        if delta:
+            yield delta
+
+
+async def _stream_openrouter(
+    api_key: str, model: str, messages: list[dict],
+) -> AsyncIterator[str]:
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        # OpenRouter recommends these for proper attribution / rate-limit tier:
+        "HTTP-Referer": os.getenv("OPENROUTER_SITE_URL", "https://rifat-ai.fly.dev"),
+        "X-Title": "RIFAT < AI",
+    }
+    body = {
+        "model": model,
+        "messages": messages,
+        "stream": True,
+        "max_tokens": GROQ_CHAT_MAX_TOKENS,
+        "temperature": GROQ_CHAT_TEMPERATURE,
+    }
+    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as http:
+        async with http.stream(
+            "POST",
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json=body,
+        ) as resp:
+            if resp.status_code != 200:
+                err = (await resp.aread()).decode("utf-8", "ignore")[:300]
+                raise GroqError(f"OpenRouter HTTP {resp.status_code}: {err}")
+            async for line in resp.aiter_lines():
+                if not line or not line.startswith("data:"):
+                    continue
+                payload = line[5:].strip()
+                if not payload or payload == "[DONE]":
+                    if payload == "[DONE]":
+                        return
+                    continue
+                try:
+                    obj = json.loads(payload)
+                    delta = obj["choices"][0].get("delta", {}).get("content")
+                except (json.JSONDecodeError, KeyError, IndexError, TypeError):
+                    continue
+                if delta:
+                    yield delta
+
+
+async def chat_stream(
+    messages: list[dict],
+    *,
+    system: Optional[str] = None,
+) -> AsyncIterator[str]:
+    """Stream chat tokens from the first available provider; fall back on errors.
+
+    `messages` is a list of {role: 'user'|'assistant', content: str} (no system
+    role — pass `system` separately). Yields plain string deltas.
+
+    Raises GroqNotConfigured if no provider is set up.
+    Raises GroqError if all configured providers fail before producing tokens.
+    Once tokens start flowing for a provider, errors propagate as GroqError
+    rather than falling back (the user has already seen partial output).
+    """
+    providers = _chat_providers()
+    if not providers:
+        raise GroqNotConfigured(
+            "No AI provider configured. Set GROQ_API_KEY (and optionally "
+            "GROQ_API_KEY_2 / OPENROUTER_API_KEY) in your environment."
+        )
+
+    # Build the full message stack with system prompt at index 0.
+    full = [{"role": "system", "content": system or CHAT_SYSTEM_DEFAULT}]
+    full.extend(messages)
+
+    last_err: Optional[Exception] = None
+    for name, key, model in providers:
+        agen = (
+            _stream_openrouter(key, model, full)
+            if name == "openrouter"
+            else _stream_groq(key, model, full)
+        )
+        try:
+            first_chunk = await agen.__anext__()
+        except StopAsyncIteration:
+            # Empty stream — try the next provider.
+            last_err = GroqError(f"{name}: empty response")
+            logger.warning(f"chat: {name} returned no tokens; falling back")
+            continue
+        except (RateLimitError, APIError, GroqError, httpx.HTTPError, asyncio.TimeoutError) as e:
+            last_err = e
+            logger.warning(f"chat: {name} pre-stream error ({type(e).__name__}: {e}); falling back")
+            continue
+        except Exception as e:  # pragma: no cover — guard against SDK surprises
+            last_err = e
+            logger.warning(f"chat: {name} unexpected pre-stream error ({type(e).__name__}: {e}); falling back")
+            continue
+
+        # First chunk landed — commit to this provider.
+        yield first_chunk
+        try:
+            async for delta in agen:
+                yield delta
+        except (RateLimitError, APIError, GroqError, httpx.HTTPError, asyncio.TimeoutError) as e:
+            # Already streaming — surface as a clean error so the frontend can
+            # display "(connection dropped)" rather than silently truncating.
+            raise GroqError(f"{name}: stream interrupted ({e})") from e
+        return
+
+    raise GroqError(f"All chat providers failed. Last error: {last_err}")
+
+
+def chat_provider_status() -> dict:
+    """Used by /health to report which AI providers are configured."""
+    return {
+        "groq":       bool(GROQ_API_KEY),
+        "groq_2":     bool(GROQ_API_KEY_2),
+        "openrouter": bool(OPENROUTER_API_KEY),
+        "providers":  [p[0] for p in _chat_providers()],
+    }

@@ -983,9 +983,11 @@
   const tabGenerate = $('tab-generate');
   const tabContests = $('tab-contests');
   const tabTools    = $('tab-tools');
+  const tabChat     = $('tab-chat');
   const panelGenerate = $('panel-generate');
   const panelContests = $('panel-contests');
   const panelTools    = $('panel-tools');
+  const panelChat     = $('panel-chat');
 
   const contestForm    = $('contest-form');
   const contestSubmit  = $('contest-submit');
@@ -1012,27 +1014,36 @@
   let contestAutoTimer = null;
 
   // ---- Tab switching ----
+  const VALID_TABS = ['generate', 'contests', 'tools', 'chat'];
   function switchTab(target) {
-    const tab = target === 'contests' || target === 'tools' ? target : 'generate';
-    panelGenerate.classList.toggle('hidden', tab !== 'generate');
-    panelContests.classList.toggle('hidden', tab !== 'contests');
-    if (panelTools) panelTools.classList.toggle('hidden', tab !== 'tools');
-    tabGenerate.classList.toggle('tab-pill-active', tab === 'generate');
-    tabContests.classList.toggle('tab-pill-active', tab === 'contests');
-    if (tabTools) tabTools.classList.toggle('tab-pill-active', tab === 'tools');
-    tabGenerate.setAttribute('aria-selected', String(tab === 'generate'));
-    tabContests.setAttribute('aria-selected', String(tab === 'contests'));
-    if (tabTools) tabTools.setAttribute('aria-selected', String(tab === 'tools'));
+    const tab = VALID_TABS.includes(target) ? target : 'generate';
+    const map = {
+      generate: [tabGenerate, panelGenerate],
+      contests: [tabContests, panelContests],
+      tools:    [tabTools,    panelTools],
+      chat:     [tabChat,     panelChat],
+    };
+    for (const [name, [btn, panel]] of Object.entries(map)) {
+      const active = name === tab;
+      if (panel) panel.classList.toggle('hidden', !active);
+      if (btn) {
+        btn.classList.toggle('tab-pill-active', active);
+        btn.setAttribute('aria-selected', String(active));
+      }
+    }
     // Stop any running auto-refresh when leaving the contests tab.
     if (tab !== 'contests' && contestAutoTimer) {
       clearInterval(contestAutoTimer);
       contestAutoTimer = null;
       if (contestAutoref) contestAutoref.checked = false;
     }
+    // Auto-focus the chat input when entering Chat.
+    if (tab === 'chat') setTimeout(() => $('chat-input')?.focus(), 50);
   }
   tabGenerate?.addEventListener('click', () => switchTab('generate'));
   tabContests?.addEventListener('click', () => switchTab('contests'));
   tabTools?.addEventListener('click', () => switchTab('tools'));
+  tabChat?.addEventListener('click', () => switchTab('chat'));
 
   // ---- Mode toggle (AI / All / Custom) ----
   contestModeBtns.forEach((btn) => {
@@ -1317,6 +1328,10 @@
           <kbd class="kbd">${isMac ? '⌘' : 'Ctrl'}</kbd><kbd class="kbd">3</kbd>
         </li>
         <li class="flex items-center justify-between gap-4">
+          <span class="text-slate-300">Switch to Chat tab</span>
+          <kbd class="kbd">${isMac ? '⌘' : 'Ctrl'}</kbd><kbd class="kbd">4</kbd>
+        </li>
+        <li class="flex items-center justify-between gap-4">
           <span class="text-slate-300">Toggle this sheet</span>
           <kbd class="kbd">?</kbd>
         </li>
@@ -1387,10 +1402,10 @@
       return;
     }
 
-    // Cmd/Ctrl + 1 / 2 / 3 → tab switch
-    if (modKey(e) && (e.key === '1' || e.key === '2' || e.key === '3')) {
+    // Cmd/Ctrl + 1 / 2 / 3 / 4 → tab switch
+    if (modKey(e) && ['1','2','3','4'].includes(e.key)) {
       e.preventDefault();
-      const target = { '1': 'generate', '2': 'contests', '3': 'tools' }[e.key];
+      const target = { '1': 'generate', '2': 'contests', '3': 'tools', '4': 'chat' }[e.key];
       switchTab(target);
       return;
     }
@@ -1869,6 +1884,277 @@
       // No URL — copy the text to clipboard and tell the user.
       navigator.clipboard.writeText(text).catch(() => {});
       showOcrError('No X post URL detected in the text. Copied the text to your clipboard instead — paste it into the URL field on Generate Replies, or paste a tweet URL.');
+    }
+  });
+
+  // ===========================================================================
+  //  CHAT PANEL — multi-turn streaming chat with localStorage memory.
+  // ===========================================================================
+  const chatThread   = $('chat-thread');
+  const chatEmpty    = $('chat-empty');
+  const chatForm     = $('chat-form');
+  const chatInput    = $('chat-input');
+  const chatSend     = $('chat-send');
+  const chatSendIcon = $('chat-send-icon');
+  const chatSendSpin = $('chat-send-spinner');
+  const chatNew      = $('chat-new');
+  const chatError    = $('chat-error');
+  const chatTokInfo  = $('chat-token-info');
+  const chatProvHint = $('chat-provider-hint');
+
+  const CHAT_KEY     = 'rifat-ai:chat:v1';
+  const CHAT_MAX_TURNS = 40;     // server cap matches this
+
+  /** @type {{role:'user'|'assistant', content:string, ts:number}[]} */
+  let chatHistory = [];
+  let chatStreaming = false;
+
+  // Surface configured providers in the header hint (best-effort, optional).
+  fetch('/health').then((r) => r.ok ? r.json() : null).then((j) => {
+    if (j?.chat?.providers && chatProvHint) {
+      const names = j.chat.providers.map((p) => ({
+        groq: 'Groq', groq2: 'Groq #2', openrouter: 'OpenRouter',
+      }[p] || p));
+      chatProvHint.textContent = names.length > 1
+        ? `Powered by ${names[0]} · fallback: ${names.slice(1).join(' → ')} · streaming · multi-turn memory`
+        : `Powered by ${names[0]} · streaming · multi-turn memory`;
+    }
+  }).catch(() => {});
+
+  function loadChatHistory() {
+    try {
+      const raw = localStorage.getItem(CHAT_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr.slice(-CHAT_MAX_TURNS) : [];
+    } catch { return []; }
+  }
+  function saveChatHistory() {
+    try {
+      localStorage.setItem(
+        CHAT_KEY,
+        JSON.stringify(chatHistory.slice(-CHAT_MAX_TURNS)),
+      );
+    } catch { /* quota — ignore */ }
+  }
+  function updateChatTokInfo() {
+    const userTurns = chatHistory.filter((m) => m.role === 'user').length;
+    if (!userTurns) {
+      chatTokInfo.textContent = 'No conversation yet';
+    } else {
+      chatTokInfo.textContent = `${userTurns} message${userTurns === 1 ? '' : 's'} · ${chatHistory.length} turns in memory`;
+    }
+  }
+
+  // Render a message bubble. `live` true means it streams (no copy until done).
+  function renderChatMessage(msg, { live = false } = {}) {
+    if (chatEmpty) chatEmpty.classList.add('hidden');
+    const wrap = document.createElement('div');
+    wrap.className = 'chat-msg flex ' + (msg.role === 'user' ? 'justify-end' : 'justify-start');
+
+    const bubble = document.createElement('div');
+    bubble.className = [
+      'rounded-2xl px-4 py-3 max-w-[88%] sm:max-w-[80%] text-[14.5px] leading-relaxed whitespace-pre-wrap break-words',
+      msg.role === 'user'
+        ? 'bg-accent-500/15 border border-accent-500/25 text-slate-100'
+        : 'bg-ink-800/70 border border-white/[0.06] text-slate-100',
+    ].join(' ');
+
+    const textEl = document.createElement('div');
+    textEl.className = 'chat-msg-text';
+    textEl.textContent = msg.content || '';
+    bubble.appendChild(textEl);
+
+    // Add a streaming cursor for live assistant messages.
+    let cursor = null;
+    if (live) {
+      cursor = document.createElement('span');
+      cursor.className = 'inline-block w-[2px] h-[16px] -mb-[2px] ml-[2px] bg-accent-400/80 animate-pulse align-text-bottom';
+      bubble.appendChild(cursor);
+    }
+
+    // Footer (copy button on assistant turns, when not live or after done).
+    if (msg.role === 'assistant' && !live) addAssistantFooter(bubble, msg);
+
+    wrap.appendChild(bubble);
+    chatThread.appendChild(wrap);
+    chatThread.scrollTop = chatThread.scrollHeight;
+    return { wrap, bubble, textEl, cursor };
+  }
+
+  function addAssistantFooter(bubble, msg) {
+    if (bubble.querySelector('.chat-msg-footer')) return;
+    const foot = document.createElement('div');
+    foot.className = 'chat-msg-footer mt-2 flex items-center gap-1.5 text-[11.5px] text-slate-500';
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'btn-ghost h-6 px-2 inline-flex items-center gap-1 text-[11px]';
+    copyBtn.innerHTML = '<svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg><span>Copy</span>';
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(msg.content || '');
+        copyBtn.querySelector('span').textContent = 'Copied';
+        fx.tap();
+        setTimeout(() => { copyBtn.querySelector('span').textContent = 'Copy'; }, 1500);
+      } catch { /* ignore */ }
+    });
+    foot.appendChild(copyBtn);
+    bubble.appendChild(foot);
+  }
+
+  function showChatError(msg) {
+    chatError.textContent = msg;
+    chatError.classList.remove('hidden');
+    setTimeout(() => chatError.classList.add('hidden'), 8000);
+    fx.error();
+  }
+
+  function setChatLoading(on) {
+    chatStreaming = on;
+    chatSend.disabled = on;
+    chatInput.disabled = false;  // keep input enabled so user can compose next msg
+    chatSendIcon.classList.toggle('hidden', on);
+    chatSendSpin.classList.toggle('hidden', !on);
+  }
+
+  // Auto-grow the textarea up to max-height.
+  function autoGrowChatInput() {
+    chatInput.style.height = 'auto';
+    chatInput.style.height = Math.min(chatInput.scrollHeight, 160) + 'px';
+  }
+  chatInput?.addEventListener('input', autoGrowChatInput);
+
+  // Enter to send, Shift+Enter for newline.
+  chatInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      chatForm.requestSubmit();
+    }
+  });
+
+  // Suggestion chips — fill input + send if it's a self-contained prompt.
+  document.querySelectorAll('.chat-suggest').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const p = btn.dataset.prompt || '';
+      chatInput.value = p;
+      autoGrowChatInput();
+      chatInput.focus();
+      // If it ends with ': ' it's a fill-in template — wait for user.
+      if (!p.endsWith(': ')) chatForm.requestSubmit();
+    });
+  });
+
+  chatNew?.addEventListener('click', () => {
+    if (chatStreaming) return;
+    if (chatHistory.length && !confirm('Start a new chat? Current conversation will be cleared.')) return;
+    chatHistory = [];
+    saveChatHistory();
+    chatThread.querySelectorAll('.chat-msg').forEach((el) => el.remove());
+    if (chatEmpty) chatEmpty.classList.remove('hidden');
+    updateChatTokInfo();
+    fx.tap();
+    chatInput.focus();
+  });
+
+  // Restore on first load.
+  chatHistory = loadChatHistory();
+  if (chatHistory.length) {
+    if (chatEmpty) chatEmpty.classList.add('hidden');
+    chatHistory.forEach((m) => renderChatMessage(m));
+  }
+  updateChatTokInfo();
+
+  // Send.
+  chatForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (chatStreaming) return;
+    const text = (chatInput.value || '').trim();
+    if (!text) return;
+
+    // Push user turn.
+    const userMsg = { role: 'user', content: text, ts: Date.now() };
+    chatHistory.push(userMsg);
+    saveChatHistory();
+    renderChatMessage(userMsg);
+    chatInput.value = '';
+    autoGrowChatInput();
+    updateChatTokInfo();
+    fx.tap();
+
+    // Render live assistant placeholder.
+    const liveMsg = { role: 'assistant', content: '', ts: Date.now() };
+    const live = renderChatMessage(liveMsg, { live: true });
+    setChatLoading(true);
+
+    try {
+      const resp = await fetch('/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+        body: JSON.stringify({
+          messages: chatHistory.slice(-CHAT_MAX_TURNS).map((m) => ({ role: m.role, content: m.content })),
+        }),
+      });
+      if (!resp.ok || !resp.body) {
+        let detail = `Request failed (HTTP ${resp.status})`;
+        try { const j = await resp.json(); if (j.detail) detail = j.detail; } catch {}
+        throw new Error(detail);
+      }
+      const reader = resp.body.getReader();
+      const dec = new TextDecoder('utf-8');
+      let buf = '';
+      let acc = '';
+      let terminalErr = null;
+      let final = null;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let sep;
+        while ((sep = buf.indexOf('\n\n')) >= 0) {
+          const block = buf.slice(0, sep);
+          buf = buf.slice(sep + 2);
+          let evType = 'message';
+          const dataLines = [];
+          for (const line of block.split('\n')) {
+            if (line.startsWith('event:')) evType = line.slice(6).trim();
+            else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+          }
+          if (!dataLines.length) continue;
+          let data;
+          try { data = JSON.parse(dataLines.join('\n')); } catch { continue; }
+          if (evType === 'delta' && data.delta) {
+            acc += data.delta;
+            live.textEl.textContent = acc;
+            chatThread.scrollTop = chatThread.scrollHeight;
+          } else if (evType === 'done') {
+            final = data.content || acc;
+          } else if (evType === 'error') {
+            terminalErr = data.error || 'Chat failed.';
+          }
+        }
+      }
+
+      if (terminalErr) throw new Error(terminalErr);
+
+      // Finalize live message → push to history with copy button.
+      const finalText = (final || acc || '').trim();
+      live.cursor?.remove();
+      live.textEl.textContent = finalText || '(empty response)';
+      const assistantMsg = { role: 'assistant', content: finalText, ts: Date.now() };
+      chatHistory.push(assistantMsg);
+      saveChatHistory();
+      addAssistantFooter(live.bubble, assistantMsg);
+      updateChatTokInfo();
+      fx.success();
+    } catch (err) {
+      // Drop the failed live placeholder; do NOT save assistant turn to history
+      // (so retry doesn't repeat a bad turn).
+      live.wrap.remove();
+      const finalText = err.message || String(err);
+      showChatError(finalText);
+    } finally {
+      setChatLoading(false);
+      chatInput.focus();
     }
   });
 })();

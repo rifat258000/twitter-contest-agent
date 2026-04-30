@@ -112,7 +112,7 @@
       </p>
     </header>
 
-    <!-- Tab nav: Generate Replies | Find Contests | Tools -->
+    <!-- Tab nav: Generate Replies | Find Contests | Tools | Chat -->
     <nav class="mb-6 flex justify-center">
       <div role="tablist" class="glass rounded-full p-1 inline-flex gap-1 flex-wrap">
         <button id="tab-generate" role="tab" aria-selected="true"
@@ -127,6 +127,10 @@
         <button id="tab-tools" role="tab" aria-selected="false"
           class="tab-pill px-4 sm:px-5 py-2 text-[13px] font-medium rounded-full transition-all duration-200 ease-ios">
           Tools
+        </button>
+        <button id="tab-chat" role="tab" aria-selected="false"
+          class="tab-pill px-4 sm:px-5 py-2 text-[13px] font-medium rounded-full transition-all duration-200 ease-ios">
+          Chat
           <span class="ml-1.5 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold tracking-wider bg-accent-500/20 text-accent-300 uppercase">New</span>
         </button>
       </div>
@@ -511,6 +515,63 @@
       </section>
 
     </div><!-- /panel-tools -->
+
+    <!-- ==================== PANEL: CHAT ==================== -->
+    <div id="panel-chat" class="hidden">
+      <section class="glass rounded-3xl p-5 sm:p-6 shadow-card flex flex-col h-[calc(100vh-220px)] min-h-[480px]">
+        <header class="flex items-center justify-between gap-3 mb-3 pb-3 border-b border-white/[0.05]">
+          <div class="min-w-0">
+            <h3 class="text-[15px] font-semibold text-slate-100">Ask Anything</h3>
+            <p class="text-[11.5px] text-slate-500 mt-0.5" id="chat-provider-hint">Powered by Groq · streaming · multi-turn memory</p>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <button type="button" id="chat-new" class="btn-ghost h-8 px-3 inline-flex items-center gap-1.5 text-[12px]">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+              <span>New chat</span>
+            </button>
+          </div>
+        </header>
+
+        <div id="chat-thread" class="flex-1 overflow-y-auto pr-1 space-y-4">
+          <!-- Greeting placeholder -->
+          <div id="chat-empty" class="flex flex-col items-center justify-center h-full text-center px-4">
+            <div class="w-12 h-12 rounded-2xl bg-accent-500/15 border border-accent-500/25 flex items-center justify-center mb-3">
+              <svg class="w-6 h-6 text-accent-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2a10 10 0 1 0 10 10 10 10 0 0 0-10-10z"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/></svg>
+            </div>
+            <p class="text-[14px] text-slate-300">Ask me anything</p>
+            <p class="text-[12px] text-slate-500 mt-1 max-w-md">Drafts, ideas, code, summaries, translations, analysis — same Groq AI that powers your replies, plus optional fallback keys for resilience.</p>
+            <div class="mt-5 flex flex-wrap gap-2 justify-center max-w-md">
+              <button type="button" class="chat-suggest btn-ghost h-8 px-3 text-[12px]" data-prompt="Write 3 viral X/Twitter post ideas about AI agents">Viral X post ideas</button>
+              <button type="button" class="chat-suggest btn-ghost h-8 px-3 text-[12px]" data-prompt="Translate this to Bangla naturally: ">Translate to Bangla</button>
+              <button type="button" class="chat-suggest btn-ghost h-8 px-3 text-[12px]" data-prompt="Explain how rate limits on X scraper APIs work in simple terms">Explain X rate limits</button>
+              <button type="button" class="chat-suggest btn-ghost h-8 px-3 text-[12px]" data-prompt="Give me a punchy bio under 160 chars for an X profile that posts about crypto contests">Punchy X bio</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="chat-error" class="hidden mt-3 px-3.5 py-2.5 rounded-xl border border-rose-500/20 bg-rose-950/30 text-[12.5px] text-rose-200"></div>
+
+        <form id="chat-form" class="mt-3 pt-3 border-t border-white/[0.05]">
+          <div class="flex items-end gap-2">
+            <div class="flex-1 min-w-0 relative">
+              <textarea id="chat-input" rows="1"
+                placeholder="Ask anything…  (Enter to send · Shift+Enter for newline)"
+                class="w-full resize-none rounded-2xl bg-ink-800/60 border border-white/[0.07] focus:border-accent-500/40 focus:outline-none focus:ring-2 focus:ring-accent-500/20 px-4 py-3 text-[14px] leading-relaxed text-slate-100 placeholder:text-slate-600 max-h-[160px]"></textarea>
+            </div>
+            <button type="submit" id="chat-send"
+              class="shrink-0 h-11 w-11 rounded-2xl bg-accent-500 hover:bg-accent-400 active:bg-accent-600 disabled:bg-slate-700 disabled:text-slate-500 text-white inline-flex items-center justify-center transition-colors">
+              <svg id="chat-send-icon"     class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+              <svg id="chat-send-spinner" class="hidden w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9" opacity="0.3"/><path d="M21 12a9 9 0 0 0-9-9"/></svg>
+            </button>
+          </div>
+          <p class="mt-2 text-[11px] text-slate-600">
+            <span id="chat-token-info">No conversation yet</span>
+            <span class="mx-1.5 text-slate-700">·</span>
+            <span>Saved locally on your device</span>
+          </p>
+        </form>
+      </section>
+    </div><!-- /panel-chat -->
 
     <footer class="mt-16 text-center text-[11px] text-slate-600">
       <span>FastAPI · twscrape · Groq</span>
