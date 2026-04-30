@@ -681,21 +681,27 @@ def _chat_providers() -> list[tuple[str, str, str]]:
 async def _stream_groq(
     api_key: str, model: str, messages: list[dict],
 ) -> AsyncIterator[str]:
+    # AsyncGroq wraps an httpx pool that must be closed explicitly. The
+    # try/finally guarantees client.close() runs whether the generator
+    # completes, raises, or is aclose()d on fallback in chat_stream().
     client = AsyncGroq(api_key=api_key)
-    stream = await client.chat.completions.create(
-        model=model,
-        messages=messages,
-        stream=True,
-        max_tokens=GROQ_CHAT_MAX_TOKENS,
-        temperature=GROQ_CHAT_TEMPERATURE,
-    )
-    async for chunk in stream:
-        try:
-            delta = chunk.choices[0].delta.content
-        except (AttributeError, IndexError):
-            delta = None
-        if delta:
-            yield delta
+    try:
+        stream = await client.chat.completions.create(
+            model=model,
+            messages=messages,
+            stream=True,
+            max_tokens=GROQ_CHAT_MAX_TOKENS,
+            temperature=GROQ_CHAT_TEMPERATURE,
+        )
+        async for chunk in stream:
+            try:
+                delta = chunk.choices[0].delta.content
+            except (AttributeError, IndexError):
+                delta = None
+            if delta:
+                yield delta
+    finally:
+        await client.close()
 
 
 async def _stream_openrouter(
