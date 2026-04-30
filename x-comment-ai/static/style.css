@@ -5,9 +5,16 @@
 
 :root {
   color-scheme: dark;
-  --ios-blue: #0a84ff;
-  --ios-blue-press: #0070e0;
-  --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
+  /* Brand tokens (mirror of tailwind.config in index.html). */
+  --bg:           #0B0F1A;
+  --accent:       #3B82F6;
+  --accent-hover: #60A5FA;
+  --accent-press: #2563EB;
+  --success:      #10B981;
+  --ease-ios:     cubic-bezier(0.32, 0.72, 0, 1);
+  /* Legacy aliases kept for any third-party utilities still using them. */
+  --ios-blue:        var(--accent);
+  --ios-blue-press:  var(--accent-press);
 }
 
 html, body {
@@ -30,17 +37,24 @@ body {
 }
 
 /* Apply tightest tracking only to display headings, not body, so 11–13px
-   chrome text stays readable. */
+   chrome text stays readable. Sora is loaded via Google Fonts and used for
+   the hero title via .font-display; section headings stay on Inter for now
+   to keep visual rhythm calm. */
 h1, h2 { letter-spacing: -0.035em; }
+.font-display { font-family: 'Sora', 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; font-feature-settings: 'cv11', 'ss01'; }
 
 /* ---------- Glass material ---------- */
 .glass {
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0)) ,
-    rgba(10, 12, 18, 0.72);
+    linear-gradient(180deg, rgba(255,255,255,0.030), rgba(255,255,255,0)) ,
+    rgba(15, 20, 34, 0.70);
   backdrop-filter: saturate(140%) blur(24px);
   -webkit-backdrop-filter: saturate(140%) blur(24px);
-  border: 1px solid rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.08);
+  transition: border-color 220ms var(--ease-ios), box-shadow 220ms var(--ease-ios), transform 220ms var(--ease-ios);
+}
+.glass:hover {
+  border-color: rgba(59, 130, 246, 0.18);
 }
 
 /* ---------- Animated background blobs (toned down) ---------- */
@@ -54,23 +68,23 @@ h1, h2 { letter-spacing: -0.035em; }
 .blob-a {
   top: -15%; left: -12%;
   width: 520px; height: 520px;
-  background: radial-gradient(circle at 30% 30%, #0a84ff, transparent 60%);
+  background: radial-gradient(circle at 30% 30%, var(--accent), transparent 60%);
   animation: float-a 28s ease-in-out infinite;
 }
 .blob-b {
   bottom: -20%; right: -12%;
   width: 560px; height: 560px;
-  background: radial-gradient(circle at 70% 70%, #6366f1, transparent 60%);
+  background: radial-gradient(circle at 70% 70%, var(--success), transparent 60%);
   animation: float-b 32s ease-in-out infinite;
-  opacity: 0.22;
+  opacity: 0.18;
 }
 .blob-c {
   top: 45%; left: 50%;
   transform: translate(-50%, -50%);
   width: 420px; height: 420px;
-  background: radial-gradient(circle, #8b5cf6, transparent 60%);
+  background: radial-gradient(circle, var(--accent), transparent 60%);
   animation: float-c 36s ease-in-out infinite;
-  opacity: 0.18;
+  opacity: 0.16;
 }
 @keyframes float-a {
   0%, 100% { transform: translate(0, 0) scale(1); }
@@ -88,31 +102,32 @@ h1, h2 { letter-spacing: -0.035em; }
   .blob, .blob-a, .blob-b, .blob-c { animation: none !important; }
 }
 
-/* ---------- Primary button (iOS Blue) ---------- */
+/* ---------- Primary button (Accent Blue with soft glow) ---------- */
 .btn-primary {
-  background: linear-gradient(180deg, #1b91ff 0%, var(--ios-blue) 100%);
+  background: linear-gradient(180deg, var(--accent-hover) 0%, var(--accent) 100%);
   box-shadow:
     0 1px 0 rgba(255,255,255,0.18) inset,
     0 0 0 1px rgba(255,255,255,0.05),
-    0 10px 28px -8px rgba(10, 132, 255, 0.55),
+    0 10px 28px -8px rgba(59, 130, 246, 0.55),
     0 4px 10px -2px rgba(0, 0, 0, 0.4);
   transition: transform 200ms var(--ease-ios), box-shadow 200ms var(--ease-ios), background 200ms var(--ease-ios);
 }
 .btn-primary:hover:not(:disabled) {
-  background: linear-gradient(180deg, #2da0ff 0%, #1690ff 100%);
+  background: linear-gradient(180deg, #7AAEFA 0%, var(--accent-hover) 100%);
   box-shadow:
     0 1px 0 rgba(255,255,255,0.22) inset,
     0 0 0 1px rgba(255,255,255,0.08),
-    0 14px 36px -8px rgba(10, 132, 255, 0.7),
+    0 14px 36px -8px rgba(59, 130, 246, 0.75),
+    0 0 24px rgba(59, 130, 246, 0.45),
     0 6px 14px -4px rgba(0, 0, 0, 0.45);
 }
 .btn-primary:active:not(:disabled) {
   transform: scale(0.985);
-  background: linear-gradient(180deg, var(--ios-blue-press) 0%, #005ec4 100%);
+  background: linear-gradient(180deg, var(--accent-press) 0%, #1E40AF 100%);
   box-shadow:
     0 1px 0 rgba(255,255,255,0.10) inset,
     0 0 0 1px rgba(255,255,255,0.04),
-    0 4px 10px -2px rgba(10, 132, 255, 0.4);
+    0 4px 10px -2px rgba(59, 130, 246, 0.4);
 }
 .btn-primary:disabled {
   opacity: 0.55;
@@ -132,11 +147,16 @@ h1, h2 { letter-spacing: -0.035em; }
 .btn-pill:active { transform: scale(0.97); }
 
 .btn-pill-accent {
-  border-color: rgba(10, 132, 255, 0.32);
-  background: rgba(10, 132, 255, 0.10);
-  color: #6ab5ff;
+  border-color: rgba(59, 130, 246, 0.32);
+  background: rgba(59, 130, 246, 0.10);
+  color: #93C5FD;
 }
-.btn-pill-accent:hover { background: rgba(10, 132, 255, 0.18); border-color: rgba(10, 132, 255, 0.45); color: #93c8ff; }
+.btn-pill-accent:hover {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.50);
+  color: #BFDBFE;
+  box-shadow: 0 0 16px rgba(59, 130, 246, 0.25);
+}
 
 .btn-pill-emerald {
   border-color: rgba(16, 185, 129, 0.32);
