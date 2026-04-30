@@ -1435,23 +1435,34 @@
   //  TOOLS PANEL — Image → PDF (offline, jsPDF) and Image → Text (Groq vision).
   // ===========================================================================
 
-  // Lazy-load jsPDF the first time it's needed.
-  const JSPDF_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
+  // Lazy-load jsPDF the first time it's needed. Self-hosted so it works on
+  // networks that block cdnjs / unpkg, and so the service worker can cache it
+  // for fully-offline PDF builds.
+  const JSPDF_URLS = [
+    '/static/vendor/jspdf.umd.min.js',
+    'https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js',
+    'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js',
+  ];
   let _jsPDFPromise = null;
   function loadJsPDF() {
     if (window.jspdf?.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
     if (_jsPDFPromise) return _jsPDFPromise;
-    _jsPDFPromise = new Promise((resolve, reject) => {
+    const tryUrl = (idx) => new Promise((resolve, reject) => {
+      if (idx >= JSPDF_URLS.length) {
+        reject(new Error('Could not load jsPDF from any source. Check your connection and try again.'));
+        return;
+      }
       const s = document.createElement('script');
-      s.src = JSPDF_URL;
+      s.src = JSPDF_URLS[idx];
       s.async = true;
       s.onload = () => {
         if (window.jspdf?.jsPDF) resolve(window.jspdf.jsPDF);
-        else reject(new Error('jsPDF failed to load'));
+        else tryUrl(idx + 1).then(resolve, reject);
       };
-      s.onerror = () => reject(new Error('Could not fetch jsPDF (offline?)'));
+      s.onerror = () => tryUrl(idx + 1).then(resolve, reject);
       document.head.appendChild(s);
     });
+    _jsPDFPromise = tryUrl(0);
     return _jsPDFPromise;
   }
 

@@ -2,7 +2,7 @@
  * Strategy: app-shell precache + network-first for HTML, cache-first for static.
  * /generate, /regenerate are NEVER cached (live data).
  */
-const VERSION = 'v12-rebrand';
+const VERSION = 'v13-jspdf-local';
 const SHELL_CACHE = `rifatai-shell-${VERSION}`;
 const RUNTIME_CACHE = `rifatai-runtime-${VERSION}`;
 
@@ -10,6 +10,7 @@ const SHELL_ASSETS = [
   '/',
   '/static/style.css',
   '/static/app.js',
+  '/static/vendor/jspdf.umd.min.js',
   '/static/manifest.webmanifest',
   '/static/icons/icon-180.png',
   '/static/icons/icon-192.png',
