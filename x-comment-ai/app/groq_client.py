@@ -36,8 +36,11 @@ GROQ_VISION_MODEL = os.getenv(
 GROQ_OCR_MAX_TOKENS = int(os.getenv("GROQ_OCR_MAX_TOKENS", "2048"))
 
 # Optional fallback providers — if Groq is rate-limited or out of quota, the
-# chat endpoint will transparently retry on the next provider in this order.
+# chat endpoint will transparently retry on the next provider in this order:
+# Groq → Groq #2 → Gemini → OpenRouter.
 GROQ_API_KEY_2 = os.getenv("GROQ_API_KEY_2", "").strip()
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip()
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
 OPENROUTER_MODEL = os.getenv(
     "OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free"
@@ -636,12 +639,19 @@ CHAT_SYSTEM_DEFAULT = (
 
 
 def _chat_providers() -> list[tuple[str, str, str]]:
-    """Build the ordered list of (name, api_key, model) for chat fallback."""
+    """Build the ordered list of (name, api_key, model) for chat fallback.
+
+    Order is intentional: Groq is fastest (~700 tok/s), Gemini is most
+    generous on free-tier daily quota, OpenRouter is slowest but truly
+    independent infra.
+    """
     out: list[tuple[str, str, str]] = []
     if GROQ_API_KEY:
         out.append(("groq", GROQ_API_KEY, GROQ_CHAT_MODEL))
     if GROQ_API_KEY_2:
         out.append(("groq2", GROQ_API_KEY_2, GROQ_CHAT_MODEL))
+    if GEMINI_API_KEY:
+        out.append(("gemini", GEMINI_API_KEY, GEMINI_MODEL))
     if OPENROUTER_API_KEY:
         out.append(("openrouter", OPENROUTER_API_KEY, OPENROUTER_MODEL))
     return out
@@ -711,6 +721,75 @@ async def _stream_openrouter(
                     yield delta
 
 
+async def _stream_gemini(
+    api_key: str, model: str, messages: list[dict],
+) -> AsyncIterator[str]:
+    """Stream tokens from Google Gemini's REST API.
+
+    Gemini uses a different shape from OpenAI/Groq:
+    - role names are "user" / "model" (not "user" / "assistant")
+    - the system prompt goes in `systemInstruction`, not the messages list
+    - chunks come back as JSON objects with `candidates[0].content.parts[].text`
+    """
+    # Split the system message off (if present at messages[0]).
+    sys_prompt = ""
+    msgs = list(messages)
+    if msgs and msgs[0].get("role") == "system":
+        sys_prompt = msgs[0].get("content", "") or ""
+        msgs = msgs[1:]
+
+    contents = []
+    for m in msgs:
+        role = "user" if m["role"] == "user" else "model"
+        contents.append({"role": role, "parts": [{"text": m["content"]}]})
+
+    body: dict = {
+        "contents": contents,
+        "generationConfig": {
+            "maxOutputTokens": GROQ_CHAT_MAX_TOKENS,
+            "temperature": GROQ_CHAT_TEMPERATURE,
+        },
+    }
+    if sys_prompt:
+        body["systemInstruction"] = {"parts": [{"text": sys_prompt}]}
+
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{model}:streamGenerateContent?alt=sse"
+    )
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": api_key,
+    }
+    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as http:
+        async with http.stream("POST", url, headers=headers, json=body) as resp:
+            if resp.status_code != 200:
+                err = (await resp.aread()).decode("utf-8", "ignore")[:300]
+                raise GroqError(f"Gemini HTTP {resp.status_code}: {err}")
+            async for line in resp.aiter_lines():
+                if not line or not line.startswith("data:"):
+                    continue
+                payload = line[5:].strip()
+                if not payload:
+                    continue
+                try:
+                    obj = json.loads(payload)
+                except json.JSONDecodeError:
+                    continue
+                # Surface explicit errors that come back as a JSON object.
+                if "error" in obj:
+                    msg = obj["error"].get("message", str(obj["error"]))
+                    raise GroqError(f"Gemini: {msg}")
+                try:
+                    parts = obj["candidates"][0]["content"]["parts"]
+                except (KeyError, IndexError, TypeError):
+                    continue
+                for p in parts:
+                    text = p.get("text") if isinstance(p, dict) else None
+                    if text:
+                        yield text
+
+
 async def chat_stream(
     messages: list[dict],
     *,
@@ -730,7 +809,8 @@ async def chat_stream(
     if not providers:
         raise GroqNotConfigured(
             "No AI provider configured. Set GROQ_API_KEY (and optionally "
-            "GROQ_API_KEY_2 / OPENROUTER_API_KEY) in your environment."
+            "GROQ_API_KEY_2 / GEMINI_API_KEY / OPENROUTER_API_KEY) in your "
+            "environment."
         )
 
     # Build the full message stack with system prompt at index 0.
@@ -739,11 +819,12 @@ async def chat_stream(
 
     last_err: Optional[Exception] = None
     for name, key, model in providers:
-        agen = (
-            _stream_openrouter(key, model, full)
-            if name == "openrouter"
-            else _stream_groq(key, model, full)
-        )
+        if name == "openrouter":
+            agen = _stream_openrouter(key, model, full)
+        elif name == "gemini":
+            agen = _stream_gemini(key, model, full)
+        else:
+            agen = _stream_groq(key, model, full)
         try:
             first_chunk = await agen.__anext__()
         except StopAsyncIteration:
@@ -779,6 +860,7 @@ def chat_provider_status() -> dict:
     return {
         "groq":       bool(GROQ_API_KEY),
         "groq_2":     bool(GROQ_API_KEY_2),
+        "gemini":     bool(GEMINI_API_KEY),
         "openrouter": bool(OPENROUTER_API_KEY),
         "providers":  [p[0] for p in _chat_providers()],
     }

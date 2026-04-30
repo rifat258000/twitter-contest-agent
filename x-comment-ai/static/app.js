@@ -1913,7 +1913,7 @@
   fetch('/health').then((r) => r.ok ? r.json() : null).then((j) => {
     if (j?.chat?.providers && chatProvHint) {
       const names = j.chat.providers.map((p) => ({
-        groq: 'Groq', groq2: 'Groq #2', openrouter: 'OpenRouter',
+        groq: 'Groq', groq2: 'Groq #2', gemini: 'Gemini', openrouter: 'OpenRouter',
       }[p] || p));
       chatProvHint.textContent = names.length > 1
         ? `Powered by ${names[0]} · fallback: ${names.slice(1).join(' → ')} · streaming · multi-turn memory`
