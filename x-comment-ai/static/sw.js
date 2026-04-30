@@ -2,7 +2,7 @@
  * Strategy: app-shell precache + network-first for HTML, cache-first for static.
  * /generate, /regenerate are NEVER cached (live data).
  */
-const VERSION = 'v11-sora';
+const VERSION = 'v12-rebrand';
 const SHELL_CACHE = `rifatai-shell-${VERSION}`;
 const RUNTIME_CACHE = `rifatai-runtime-${VERSION}`;
 

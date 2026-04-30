@@ -1,6 +1,6 @@
 {
-  "name": "RIFAT < AI",
-  "short_name": "RIFAT < AI",
+  "name": "Rifat Ai Model",
+  "short_name": "Rifat Ai",
   "description": "Generate engaging X (Twitter) replies in 1 click \u2014 paste any number of post links, get tailored, on-brand replies with tone and length controls.",
   "start_url": "/?source=pwa",
   "scope": "/",

@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="RIFAT < AI",
+    title="Rifat Ai Model",
     description="Generate engaging X (Twitter) replies with Groq + twscrape.",
     version="1.0.0",
     lifespan=lifespan,

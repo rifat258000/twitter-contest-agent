@@ -629,7 +629,7 @@ async def extract_text_from_image(
 # Chat — multi-provider streaming with automatic fallback
 # ---------------------------------------------------------------------------
 CHAT_SYSTEM_DEFAULT = (
-    "You are a helpful AI assistant inside the RIFAT < AI app. "
+    "You are Rifat Ai Model, a helpful AI assistant. "
     "Be concise, friendly, and direct. Skip filler ('Sure!', 'Of course!'). "
     "Use markdown headings/lists only when they meaningfully aid clarity. "
     "If the user asks you to draft a reply for an X/Twitter post, keep it "
@@ -685,7 +685,7 @@ async def _stream_openrouter(
         "Content-Type": "application/json",
         # OpenRouter recommends these for proper attribution / rate-limit tier:
         "HTTP-Referer": os.getenv("OPENROUTER_SITE_URL", "https://rifat-ai.fly.dev"),
-        "X-Title": "RIFAT < AI",
+        "X-Title": "Rifat Ai Model",
     }
     body = {
         "model": model,
