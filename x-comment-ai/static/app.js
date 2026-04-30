@@ -981,8 +981,10 @@
   // ===========================================================================
   const tabGenerate = $('tab-generate');
   const tabContests = $('tab-contests');
+  const tabTools    = $('tab-tools');
   const panelGenerate = $('panel-generate');
   const panelContests = $('panel-contests');
+  const panelTools    = $('panel-tools');
 
   const contestForm    = $('contest-form');
   const contestSubmit  = $('contest-submit');
@@ -1010,15 +1012,18 @@
 
   // ---- Tab switching ----
   function switchTab(target) {
-    const isContests = target === 'contests';
-    panelGenerate.classList.toggle('hidden', isContests);
-    panelContests.classList.toggle('hidden', !isContests);
-    tabGenerate.classList.toggle('tab-pill-active', !isContests);
-    tabContests.classList.toggle('tab-pill-active',  isContests);
-    tabGenerate.setAttribute('aria-selected', String(!isContests));
-    tabContests.setAttribute('aria-selected',  String( isContests));
+    const tab = target === 'contests' || target === 'tools' ? target : 'generate';
+    panelGenerate.classList.toggle('hidden', tab !== 'generate');
+    panelContests.classList.toggle('hidden', tab !== 'contests');
+    if (panelTools) panelTools.classList.toggle('hidden', tab !== 'tools');
+    tabGenerate.classList.toggle('tab-pill-active', tab === 'generate');
+    tabContests.classList.toggle('tab-pill-active', tab === 'contests');
+    if (tabTools) tabTools.classList.toggle('tab-pill-active', tab === 'tools');
+    tabGenerate.setAttribute('aria-selected', String(tab === 'generate'));
+    tabContests.setAttribute('aria-selected', String(tab === 'contests'));
+    if (tabTools) tabTools.setAttribute('aria-selected', String(tab === 'tools'));
     // Stop any running auto-refresh when leaving the contests tab.
-    if (!isContests && contestAutoTimer) {
+    if (tab !== 'contests' && contestAutoTimer) {
       clearInterval(contestAutoTimer);
       contestAutoTimer = null;
       if (contestAutoref) contestAutoref.checked = false;
@@ -1026,6 +1031,7 @@
   }
   tabGenerate?.addEventListener('click', () => switchTab('generate'));
   tabContests?.addEventListener('click', () => switchTab('contests'));
+  tabTools?.addEventListener('click', () => switchTab('tools'));
 
   // ---- Mode toggle (AI / All / Custom) ----
   contestModeBtns.forEach((btn) => {
@@ -1306,6 +1312,10 @@
           <kbd class="kbd">${isMac ? '⌘' : 'Ctrl'}</kbd><kbd class="kbd">2</kbd>
         </li>
         <li class="flex items-center justify-between gap-4">
+          <span class="text-slate-300">Switch to Tools tab</span>
+          <kbd class="kbd">${isMac ? '⌘' : 'Ctrl'}</kbd><kbd class="kbd">3</kbd>
+        </li>
+        <li class="flex items-center justify-between gap-4">
           <span class="text-slate-300">Toggle this sheet</span>
           <kbd class="kbd">?</kbd>
         </li>
@@ -1376,10 +1386,11 @@
       return;
     }
 
-    // Cmd/Ctrl + 1 / 2 → tab switch
-    if (modKey(e) && (e.key === '1' || e.key === '2')) {
+    // Cmd/Ctrl + 1 / 2 / 3 → tab switch
+    if (modKey(e) && (e.key === '1' || e.key === '2' || e.key === '3')) {
       e.preventDefault();
-      switchTab(e.key === '1' ? 'generate' : 'contests');
+      const target = { '1': 'generate', '2': 'contests', '3': 'tools' }[e.key];
+      switchTab(target);
       return;
     }
 
@@ -1401,6 +1412,462 @@
       // Confirm with a tap if we just unmuted (otherwise muted = no feedback)
       if (!next) fx.tap();
       return;
+    }
+  });
+
+  // ===========================================================================
+  //  TOOLS PANEL — Image → PDF (offline, jsPDF) and Image → Text (Groq vision).
+  // ===========================================================================
+
+  // Lazy-load jsPDF the first time it's needed.
+  const JSPDF_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
+  let _jsPDFPromise = null;
+  function loadJsPDF() {
+    if (window.jspdf?.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
+    if (_jsPDFPromise) return _jsPDFPromise;
+    _jsPDFPromise = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = JSPDF_URL;
+      s.async = true;
+      s.onload = () => {
+        if (window.jspdf?.jsPDF) resolve(window.jspdf.jsPDF);
+        else reject(new Error('jsPDF failed to load'));
+      };
+      s.onerror = () => reject(new Error('Could not fetch jsPDF (offline?)'));
+      document.head.appendChild(s);
+    });
+    return _jsPDFPromise;
+  }
+
+  // -------- File helpers --------
+  const readFileAsDataURL = (file) => new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onerror = () => rej(new Error('Could not read ' + file.name));
+    fr.onload = () => res(fr.result);
+    fr.readAsDataURL(file);
+  });
+
+  const loadImage = (src) => new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = () => rej(new Error('Image failed to load (unsupported format?)'));
+    img.src = src;
+  });
+
+  const fmtBytes = (n) => {
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    return `${(n / 1024 / 1024).toFixed(2)} MB`;
+  };
+
+  // Downscale an image to a target max edge, return base64 JPEG (smaller payload for OCR).
+  async function downscaleImageToJpeg(file, maxEdge = 1600, quality = 0.85) {
+    const dataUrl = await readFileAsDataURL(file);
+    const img = await loadImage(dataUrl);
+    const ratio = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.max(1, Math.round(img.naturalWidth * ratio));
+    const h = Math.max(1, Math.round(img.naturalHeight * ratio));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';  // flatten transparency for JPEG
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    return canvas.toDataURL('image/jpeg', quality);
+  }
+
+  // ============================ Image → PDF ===================================
+  const pdfDrop      = $('pdf-drop');
+  const pdfFiles     = $('pdf-files');
+  const pdfList      = $('pdf-list');
+  const pdfActions   = $('pdf-actions');
+  const pdfBuild     = $('pdf-build');
+  const pdfPageSize  = $('pdf-page-size');
+  const pdfOrient    = $('pdf-orientation');
+  const pdfStatus    = $('pdf-status');
+  const pdfError     = $('pdf-error');
+
+  /** @type {{id:string,file:File,dataUrl:string,w:number,h:number}[]} */
+  const pdfItems = [];
+  let pdfDragId = null;
+
+  const showPdfError = (msg) => {
+    pdfError.textContent = msg;
+    pdfError.classList.remove('hidden');
+    setTimeout(() => pdfError.classList.add('hidden'), 6000);
+  };
+  const setPdfStatus = (msg) => {
+    if (msg) {
+      pdfStatus.textContent = msg;
+      pdfStatus.classList.remove('hidden');
+    } else {
+      pdfStatus.classList.add('hidden');
+    }
+  };
+
+  function renderPdfList() {
+    pdfList.innerHTML = '';
+    if (!pdfItems.length) {
+      pdfList.classList.add('hidden');
+      pdfActions.classList.add('hidden');
+      pdfActions.classList.remove('flex');
+      return;
+    }
+    pdfList.classList.remove('hidden');
+    pdfActions.classList.remove('hidden');
+    pdfActions.classList.add('flex');
+
+    pdfItems.forEach((item, idx) => {
+      const li = document.createElement('li');
+      li.draggable = true;
+      li.dataset.id = item.id;
+      li.className = 'flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-ink-800/60 p-3 cursor-grab active:cursor-grabbing transition-colors';
+      li.innerHTML = `
+        <span class="shrink-0 w-6 text-center text-[12px] tabular-nums text-slate-500">${idx + 1}</span>
+        <img src="${item.dataUrl}" alt="" class="h-12 w-12 object-cover rounded-lg border border-white/10 shrink-0" />
+        <div class="min-w-0 flex-1">
+          <p class="text-[13px] text-slate-200 truncate">${item.file.name}</p>
+          <p class="text-[11px] text-slate-500">${item.w}×${item.h} · ${fmtBytes(item.file.size)}</p>
+        </div>
+        <div class="flex items-center gap-1 shrink-0">
+          <button type="button" data-action="up"     aria-label="Move up"     class="btn-ghost h-7 w-7 inline-flex items-center justify-center text-[14px]">↑</button>
+          <button type="button" data-action="down"   aria-label="Move down"   class="btn-ghost h-7 w-7 inline-flex items-center justify-center text-[14px]">↓</button>
+          <button type="button" data-action="remove" aria-label="Remove"      class="btn-ghost h-7 w-7 inline-flex items-center justify-center text-rose-300">×</button>
+        </div>
+      `;
+      // Buttons
+      li.querySelector('[data-action="up"]').addEventListener('click', () => movePdfItem(idx, idx - 1));
+      li.querySelector('[data-action="down"]').addEventListener('click', () => movePdfItem(idx, idx + 1));
+      li.querySelector('[data-action="remove"]').addEventListener('click', () => {
+        pdfItems.splice(idx, 1);
+        renderPdfList();
+        fx.tap();
+      });
+      // Drag-reorder
+      li.addEventListener('dragstart', () => { pdfDragId = item.id; li.classList.add('opacity-50'); });
+      li.addEventListener('dragend',   () => { pdfDragId = null;    li.classList.remove('opacity-50'); });
+      li.addEventListener('dragover',  (e) => { e.preventDefault(); });
+      li.addEventListener('drop',      (e) => {
+        e.preventDefault();
+        if (!pdfDragId || pdfDragId === item.id) return;
+        const from = pdfItems.findIndex((x) => x.id === pdfDragId);
+        const to   = pdfItems.findIndex((x) => x.id === item.id);
+        if (from < 0 || to < 0) return;
+        const [moved] = pdfItems.splice(from, 1);
+        pdfItems.splice(to, 0, moved);
+        renderPdfList();
+      });
+      pdfList.appendChild(li);
+    });
+  }
+
+  function movePdfItem(from, to) {
+    if (to < 0 || to >= pdfItems.length) return;
+    const [m] = pdfItems.splice(from, 1);
+    pdfItems.splice(to, 0, m);
+    renderPdfList();
+    fx.tap();
+  }
+
+  async function addPdfFiles(fileList) {
+    const files = Array.from(fileList || []).filter((f) => f.type.startsWith('image/'));
+    if (!files.length) {
+      showPdfError('No supported images in selection.');
+      return;
+    }
+    let added = 0;
+    for (const file of files) {
+      if (file.size > 25 * 1024 * 1024) {
+        showPdfError(`Skipped ${file.name} (over 25 MB).`);
+        continue;
+      }
+      try {
+        const dataUrl = await readFileAsDataURL(file);
+        const img = await loadImage(dataUrl);
+        pdfItems.push({
+          id: 'img_' + Math.random().toString(36).slice(2),
+          file, dataUrl,
+          w: img.naturalWidth, h: img.naturalHeight,
+        });
+        added += 1;
+      } catch (err) {
+        showPdfError(`${file.name}: ${err.message}`);
+      }
+    }
+    if (added) {
+      renderPdfList();
+      setPdfStatus(`${pdfItems.length} image${pdfItems.length === 1 ? '' : 's'} ready.`);
+      fx.tap();
+    }
+  }
+
+  pdfFiles?.addEventListener('change', (e) => {
+    addPdfFiles(e.target.files);
+    e.target.value = '';  // allow re-adding same file
+  });
+  ['dragenter', 'dragover'].forEach((ev) => {
+    pdfDrop?.addEventListener(ev, (e) => {
+      e.preventDefault(); e.stopPropagation();
+      pdfDrop.classList.add('border-accent-500/60', 'bg-ink-800/70');
+    });
+  });
+  ['dragleave', 'drop'].forEach((ev) => {
+    pdfDrop?.addEventListener(ev, (e) => {
+      e.preventDefault(); e.stopPropagation();
+      pdfDrop.classList.remove('border-accent-500/60', 'bg-ink-800/70');
+    });
+  });
+  pdfDrop?.addEventListener('drop', (e) => {
+    if (e.dataTransfer?.files?.length) addPdfFiles(e.dataTransfer.files);
+  });
+
+  pdfBuild?.addEventListener('click', async () => {
+    if (!pdfItems.length) return;
+    pdfBuild.disabled = true;
+    setPdfStatus('Building PDF…');
+    try {
+      const jsPDF = await loadJsPDF();
+      const pageMode = pdfPageSize.value;       // 'a4' | 'letter' | 'fit'
+      const orientPref = pdfOrient.value;        // 'auto' | 'portrait' | 'landscape'
+
+      // mm dimensions
+      const PAGES = {
+        a4:     { p: [210, 297], l: [297, 210] },
+        letter: { p: [216, 279], l: [279, 216] },
+      };
+
+      // Decide first page layout from first image so jsPDF gets a consistent format.
+      const first = pdfItems[0];
+      const firstLandscape = first.w > first.h;
+      let firstFmt, firstOrient;
+      if (pageMode === 'fit') {
+        // Use pixels → mm at 96dpi to keep image native size on page.
+        const pxToMm = 25.4 / 96;
+        firstFmt = [first.w * pxToMm, first.h * pxToMm];
+        firstOrient = firstLandscape ? 'l' : 'p';
+      } else {
+        const pages = PAGES[pageMode];
+        firstOrient = orientPref === 'auto' ? (firstLandscape ? 'l' : 'p') : orientPref[0];
+        firstFmt = pages[firstOrient];
+      }
+      const pdf = new jsPDF({ unit: 'mm', format: firstFmt, orientation: firstOrient === 'l' ? 'landscape' : 'portrait' });
+
+      const drawImage = (item, isFirst) => {
+        const landscape = item.w > item.h;
+        let pageW, pageH;
+        if (pageMode === 'fit') {
+          const pxToMm = 25.4 / 96;
+          pageW = item.w * pxToMm;
+          pageH = item.h * pxToMm;
+          if (!isFirst) pdf.addPage([pageW, pageH], landscape ? 'landscape' : 'portrait');
+        } else {
+          const pages = PAGES[pageMode];
+          const orient = orientPref === 'auto' ? (landscape ? 'l' : 'p') : orientPref[0];
+          [pageW, pageH] = pages[orient];
+          if (!isFirst) pdf.addPage(pages[orient], orient === 'l' ? 'landscape' : 'portrait');
+        }
+        // Fit-with-margin
+        const margin = pageMode === 'fit' ? 0 : 8;
+        const maxW = pageW - margin * 2;
+        const maxH = pageH - margin * 2;
+        const imgRatio = item.w / item.h;
+        const pageRatio = maxW / maxH;
+        let drawW, drawH;
+        if (imgRatio > pageRatio) { drawW = maxW; drawH = maxW / imgRatio; }
+        else                       { drawH = maxH; drawW = maxH * imgRatio; }
+        const x = (pageW - drawW) / 2;
+        const y = (pageH - drawH) / 2;
+        // jsPDF will infer format from data URL prefix.
+        pdf.addImage(item.dataUrl, undefined, x, y, drawW, drawH, undefined, 'FAST');
+      };
+
+      pdfItems.forEach((item, i) => drawImage(item, i === 0));
+      const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+      pdf.save(`rifat-ai-${stamp}.pdf`);
+      fx.success();
+      setPdfStatus(`Saved · ${pdfItems.length} page${pdfItems.length === 1 ? '' : 's'}.`);
+    } catch (err) {
+      showPdfError('PDF build failed: ' + err.message);
+      fx.error();
+    } finally {
+      pdfBuild.disabled = false;
+    }
+  });
+
+  // ============================ Image → Text (OCR) ============================
+  const ocrDrop       = $('ocr-drop');
+  const ocrFile       = $('ocr-file');
+  const ocrPreviewWrap= $('ocr-preview-wrap');
+  const ocrPreview    = $('ocr-preview');
+  const ocrFilename   = $('ocr-filename');
+  const ocrFilesize   = $('ocr-filesize');
+  const ocrClear      = $('ocr-clear');
+  const ocrExtract    = $('ocr-extract');
+  const ocrExtractLbl = $('ocr-extract-label');
+  const ocrExtractSpn = $('ocr-extract-spinner');
+  const ocrResultWrap = $('ocr-result-wrap');
+  const ocrResult     = $('ocr-result');
+  const ocrCopy       = $('ocr-copy');
+  const ocrDownload   = $('ocr-download');
+  const ocrToGenerate = $('ocr-to-generate');
+  const ocrStatus     = $('ocr-status');
+  const ocrError      = $('ocr-error');
+
+  let ocrCurrentFile = null;
+  let ocrCurrentDataUrl = null;
+
+  const showOcrError = (msg) => {
+    ocrError.textContent = msg;
+    ocrError.classList.remove('hidden');
+    setTimeout(() => ocrError.classList.add('hidden'), 7000);
+  };
+  const setOcrStatus = (msg) => {
+    if (msg) { ocrStatus.textContent = msg; ocrStatus.classList.remove('hidden'); }
+    else     { ocrStatus.classList.add('hidden'); }
+  };
+  const setOcrLoading = (on) => {
+    ocrExtract.disabled = on;
+    ocrExtractLbl.classList.toggle('hidden', on);
+    ocrExtractSpn.classList.toggle('hidden', !on);
+  };
+
+  function setOcrFile(file) {
+    if (!file || !file.type.startsWith('image/')) {
+      showOcrError('Please pick an image file.');
+      return;
+    }
+    if (file.size > 12 * 1024 * 1024) {
+      showOcrError('Image is too large (max 12 MB before resize).');
+      return;
+    }
+    ocrCurrentFile = file;
+    ocrCurrentDataUrl = null;
+    ocrFilename.textContent = file.name || 'pasted image';
+    ocrFilesize.textContent = `${file.type || 'image'} · ${fmtBytes(file.size)}`;
+    const blobUrl = URL.createObjectURL(file);
+    ocrPreview.src = blobUrl;
+    ocrPreviewWrap.classList.remove('hidden');
+    ocrResultWrap.classList.add('hidden');
+    setOcrStatus('');
+    fx.tap();
+  }
+
+  ocrFile?.addEventListener('change', (e) => {
+    if (e.target.files?.[0]) setOcrFile(e.target.files[0]);
+    e.target.value = '';
+  });
+  ocrClear?.addEventListener('click', () => {
+    ocrCurrentFile = null;
+    ocrCurrentDataUrl = null;
+    ocrPreviewWrap.classList.add('hidden');
+    ocrResultWrap.classList.add('hidden');
+  });
+  ['dragenter', 'dragover'].forEach((ev) => {
+    ocrDrop?.addEventListener(ev, (e) => {
+      e.preventDefault(); e.stopPropagation();
+      ocrDrop.classList.add('border-accent-500/60', 'bg-ink-800/70');
+    });
+  });
+  ['dragleave', 'drop'].forEach((ev) => {
+    ocrDrop?.addEventListener(ev, (e) => {
+      e.preventDefault(); e.stopPropagation();
+      ocrDrop.classList.remove('border-accent-500/60', 'bg-ink-800/70');
+    });
+  });
+  ocrDrop?.addEventListener('drop', (e) => {
+    if (e.dataTransfer?.files?.[0]) setOcrFile(e.dataTransfer.files[0]);
+  });
+
+  // Clipboard paste — only when Tools panel is visible.
+  document.addEventListener('paste', (e) => {
+    if (!panelTools || panelTools.classList.contains('hidden')) return;
+    const items = e.clipboardData?.items || [];
+    for (const it of items) {
+      if (it.type?.startsWith('image/')) {
+        const f = it.getAsFile();
+        if (f) {
+          e.preventDefault();
+          setOcrFile(f);
+          break;
+        }
+      }
+    }
+  });
+
+  ocrExtract?.addEventListener('click', async () => {
+    if (!ocrCurrentFile) return;
+    setOcrLoading(true);
+    setOcrStatus('Resizing image…');
+    try {
+      if (!ocrCurrentDataUrl) {
+        ocrCurrentDataUrl = await downscaleImageToJpeg(ocrCurrentFile, 1600, 0.85);
+      }
+      setOcrStatus('Extracting text with Groq vision…');
+      const res = await fetch('/ocr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: ocrCurrentDataUrl }),
+      });
+      if (!res.ok) {
+        let msg = `OCR failed (HTTP ${res.status})`;
+        try { const j = await res.json(); if (j.detail) msg = j.detail; } catch {}
+        throw new Error(msg);
+      }
+      const data = await res.json();
+      const text = (data.text || '').trim();
+      ocrResult.value = text || '(No readable text found in this image.)';
+      ocrResultWrap.classList.remove('hidden');
+      // Show "Generate replies for this" only if it looks like there's content.
+      ocrToGenerate.classList.toggle('hidden', !text);
+      setOcrStatus(text ? `Extracted ${text.length.toLocaleString()} chars.` : '');
+      fx.success();
+    } catch (err) {
+      showOcrError(err.message || String(err));
+      fx.error();
+      setOcrStatus('');
+    } finally {
+      setOcrLoading(false);
+    }
+  });
+
+  ocrCopy?.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(ocrResult.value || '');
+      ocrCopy.querySelector('span').textContent = 'Copied';
+      fx.tap();
+      setTimeout(() => { ocrCopy.querySelector('span').textContent = 'Copy'; }, 1500);
+    } catch {
+      showOcrError('Clipboard copy was blocked. Select the text and copy manually.');
+    }
+  });
+
+  ocrDownload?.addEventListener('click', () => {
+    const blob = new Blob([ocrResult.value || ''], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `rifat-ai-ocr-${Date.now()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    fx.tap();
+  });
+
+  ocrToGenerate?.addEventListener('click', () => {
+    const text = (ocrResult.value || '').trim();
+    if (!text) return;
+    // Look for an X URL in the OCR'd text — if found, send that to Generate.
+    const m = text.match(/https?:\/\/(?:x|twitter)\.com\/[^\s]+\/status\/\d+/i);
+    if (m) {
+      switchTab('generate');
+      urlsInput.value = m[0];
+      urlsInput.dispatchEvent(new Event('input', { bubbles: true }));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setTimeout(() => form?.requestSubmit?.(), 200);
+    } else {
+      // No URL — copy the text to clipboard and tell the user.
+      navigator.clipboard.writeText(text).catch(() => {});
+      showOcrError('No X post URL detected in the text. Copied the text to your clipboard instead — paste it into the URL field on Generate Replies, or paste a tweet URL.');
     }
   });
 })();

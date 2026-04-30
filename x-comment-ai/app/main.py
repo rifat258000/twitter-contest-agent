@@ -26,6 +26,7 @@ from app.groq_client import (  # noqa: E402
     TONES,
     GroqError,
     GroqNotConfigured,
+    extract_text_from_image,
     generate_comments,
     generate_comments_stream,
 )
@@ -138,6 +139,18 @@ class PreviewItem(BaseModel):
 
 class PreviewResponse(BaseModel):
     results: list[PreviewItem]
+
+
+class OCRRequest(BaseModel):
+    """Extract text from a single image (base64 data URL, max ~4 MB).
+
+    Frontend already downscales/encodes; we only validate prefix here.
+    """
+    image: str = Field(..., min_length=20, description="data:image/...;base64,...")
+
+
+class OCRResponse(BaseModel):
+    text: str
 
 
 # ---------------------------------------------------------------------------
@@ -387,6 +400,30 @@ async def preview(payload: PreviewRequest):
 
     results = await _asyncio.gather(*(_one(u) for u in payload.urls))
     return PreviewResponse(results=list(results))
+
+
+@app.post("/ocr", response_model=OCRResponse)
+async def ocr(payload: OCRRequest):
+    """Extract text from an image using Groq's vision model."""
+    img = payload.image.strip()
+    if not img.startswith("data:image/"):
+        raise HTTPException(
+            status_code=400,
+            detail="image must be a data URL like 'data:image/png;base64,...'",
+        )
+    # Soft cap at ~6 MB on the wire (base64 of ~4 MB binary).
+    if len(img) > 6_500_000:
+        raise HTTPException(
+            status_code=413,
+            detail="Image too large. Please use one under 4 MB.",
+        )
+    try:
+        text = await extract_text_from_image(img)
+    except GroqNotConfigured as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except GroqError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return OCRResponse(text=text)
 
 
 @app.post("/regenerate", response_model=RegenerateResponse)

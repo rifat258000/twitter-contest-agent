@@ -28,6 +28,11 @@ GROQ_MAX_TOKENS = int(os.getenv("GROQ_MAX_TOKENS", "200"))
 GROQ_TEMPERATURE = float(os.getenv("GROQ_TEMPERATURE", "0.8"))
 DEFAULT_REPLY_LANG = os.getenv("DEFAULT_REPLY_LANG", "auto").lower()
 
+GROQ_VISION_MODEL = os.getenv(
+    "GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct"
+).strip()
+GROQ_OCR_MAX_TOKENS = int(os.getenv("GROQ_OCR_MAX_TOKENS", "2048"))
+
 
 # ---------------------------------------------------------------------------
 # Tones & lengths
@@ -537,3 +542,68 @@ async def generate_comments(
         raise GroqError("All variants failed.")
 
     return out
+
+
+# ---------------------------------------------------------------------------
+# Vision / OCR
+# ---------------------------------------------------------------------------
+_OCR_SYSTEM = (
+    "You extract text from images. Reproduce the text exactly as it appears, "
+    "preserving line breaks, lists, and paragraph structure. Do not translate, "
+    "summarize, or add commentary."
+)
+
+_OCR_INSTRUCTION = (
+    "Extract every word of text visible in this image. Output ONLY the extracted "
+    "text, exactly as written, including punctuation and line breaks. If the "
+    "image contains no readable text, output the single word: NONE."
+)
+
+
+async def extract_text_from_image(
+    image_data_url: str,
+    *,
+    model: Optional[str] = None,
+    timeout: float = 30.0,
+) -> str:
+    """Run OCR on a base64 data URL via Groq's vision model.
+
+    `image_data_url` must be a 'data:image/<type>;base64,<...>' URL.
+    Returns the extracted text (empty string if nothing readable).
+    """
+    if not image_data_url.startswith("data:image/"):
+        raise GroqError("image_data_url must be a base64 data URL")
+
+    client = _get_client()
+    use_model = (model or GROQ_VISION_MODEL).strip()
+
+    try:
+        resp = await asyncio.wait_for(
+            client.chat.completions.create(
+                model=use_model,
+                temperature=0.0,
+                max_tokens=GROQ_OCR_MAX_TOKENS,
+                messages=[
+                    {"role": "system", "content": _OCR_SYSTEM},
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": _OCR_INSTRUCTION},
+                            {"type": "image_url", "image_url": {"url": image_data_url}},
+                        ],
+                    },
+                ],
+            ),
+            timeout=timeout,
+        )
+    except asyncio.TimeoutError as e:
+        raise GroqError(f"OCR timed out after {timeout:.0f}s") from e
+    except RateLimitError as e:
+        raise GroqError(f"Groq rate-limited: {e}") from e
+    except APIError as e:
+        raise GroqError(f"Groq API error: {e}") from e
+
+    text = (resp.choices[0].message.content or "").strip()
+    if text.upper() == "NONE":
+        return ""
+    return text
