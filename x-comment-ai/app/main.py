@@ -26,8 +26,6 @@ from app.groq_client import (  # noqa: E402
     TONES,
     GroqError,
     GroqNotConfigured,
-    chat_provider_status,
-    chat_stream,
     extract_text_from_image,
     generate_comments,
     generate_comments_stream,
@@ -155,20 +153,6 @@ class OCRResponse(BaseModel):
     text: str
 
 
-class ChatMessage(BaseModel):
-    role: str = Field(..., description='"user" | "assistant"')
-    content: str = Field(..., min_length=1, max_length=20000)
-
-
-class ChatRequest(BaseModel):
-    """Multi-turn chat. Frontend keeps history in localStorage and sends the
-    full transcript on each turn. We cap message count to keep the prompt
-    bounded; the model also has its own context window limit.
-    """
-    messages: list[ChatMessage] = Field(..., min_length=1, max_length=40)
-    system: Optional[str] = Field(default=None, max_length=4000)
-
-
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -225,7 +209,6 @@ async def health():
         "model": os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
         "tones": list(TONES.keys()),
         "lengths": list(LENGTHS.keys()),
-        "chat": chat_provider_status(),
     }
 
 
@@ -441,55 +424,6 @@ async def ocr(payload: OCRRequest):
     except GroqError as e:
         raise HTTPException(status_code=502, detail=str(e))
     return OCRResponse(text=text)
-
-
-@app.post("/chat/stream")
-async def chat_stream_endpoint(payload: ChatRequest):
-    """SSE: stream a chat reply token-by-token, with multi-provider fallback.
-
-    Event types:
-      delta { delta: "..." }
-      done  { content: "<full final reply>" }
-      error { error: "<message>", code: <int> }
-    """
-    import json as _json
-
-    # Validate roles to prevent prompt injection via the system role.
-    for m in payload.messages:
-        if m.role not in ("user", "assistant"):
-            raise HTTPException(
-                status_code=400, detail="messages.role must be 'user' or 'assistant'"
-            )
-
-    msgs = [{"role": m.role, "content": m.content} for m in payload.messages]
-
-    async def event_stream():
-        def sse(ev: str, p: dict) -> bytes:
-            return f"event: {ev}\ndata: {_json.dumps(p, ensure_ascii=False)}\n\n".encode("utf-8")
-
-        accumulated = []
-        try:
-            async for delta in chat_stream(msgs, system=payload.system):
-                accumulated.append(delta)
-                yield sse("delta", {"delta": delta})
-            yield sse("done", {"content": "".join(accumulated)})
-        except GroqNotConfigured as e:
-            yield sse("error", {"error": str(e), "code": 503})
-        except GroqError as e:
-            yield sse("error", {"error": str(e), "code": 502})
-        except Exception as e:  # noqa: BLE001
-            logger.exception("chat_stream crashed")
-            yield sse("error", {"error": f"Chat failed: {e}", "code": 500})
-
-    return StreamingResponse(
-        event_stream(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache, no-transform",
-            "X-Accel-Buffering": "no",
-            "Connection": "keep-alive",
-        },
-    )
 
 
 @app.post("/regenerate", response_model=RegenerateResponse)
