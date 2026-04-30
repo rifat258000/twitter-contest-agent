@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0B0F1A" />
+  <meta name="description" content="Paste any number of X post links — get tailored, on-brand AI replies in one click. Built with Groq + twscrape." />
+  <title>Rifat Ai Model — Generate engaging X replies in 1 click</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/icon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/icon-16.png" />
+  <link rel="shortcut icon" href="/favicon.ico" />
+
+  <!-- iOS / Apple PWA -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Rifat Ai Model" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
+  <!-- Open Graph / social -->
+  <meta property="og:title" content="Rifat Ai Model" />
+  <meta property="og:description" content="Generate engaging X replies in 1 click." />
+  <meta property="og:image" content="/static/icons/icon-512.png" />
+  <meta property="og:type" content="website" />
+
+  <!-- Tailwind via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            // Brand palette — dark navy base, electric blue accent, emerald success.
+            ink:    { 950: '#0B0F1A', 900: '#0F1422', 800: '#161C2C', 700: '#1F2638', 600: '#2A334A' },
+            accent: { 300: '#93C5FD', 400: '#60A5FA', 500: '#3B82F6', 600: '#2563EB', 700: '#1D4ED8' },
+            success:{ 300: '#6EE7B7', 400: '#34D399', 500: '#10B981', 600: '#059669', 700: '#047857' },
+          },
+          fontFamily: {
+            // Body: Inter (clean, neutral). Display: Sora (geometric, bold).
+            sans:    ['Inter', '-apple-system', 'BlinkMacSystemFont', '"SF Pro Display"', '"SF Pro Text"', 'system-ui', 'sans-serif'],
+            display: ['Sora', 'Inter', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
+          },
+          letterSpacing: { tightest: '-0.035em' },
+          boxShadow: {
+            // Layered elevation + accent glow rings.
+            soft:  '0 1px 2px rgba(0,0,0,0.30), 0 0 0 1px rgba(255,255,255,0.04) inset',
+            card:  '0 8px 24px -8px rgba(0,0,0,0.55), 0 2px 6px -2px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06) inset',
+            lift:  '0 24px 48px -16px rgba(0,0,0,0.65), 0 8px 16px -8px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.06) inset',
+            ring:  '0 0 0 4px rgba(59, 130, 246, 0.22)',
+            glow:  '0 0 24px rgba(59, 130, 246, 0.45), 0 0 0 1px rgba(59, 130, 246, 0.35)',
+            press: 'inset 0 1px 0 rgba(255,255,255,0.10)',
+          },
+          transitionTimingFunction: {
+            // iOS spring-feel ease.
+            ios: 'cubic-bezier(0.32, 0.72, 0, 1)',
+          },
+        },
+      },
+    };
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/static/style.css" />
+  <script defer src="/static/app.js"></script>
+</head>
+
+<body class="min-h-screen bg-ink-950 text-slate-100 font-sans antialiased tracking-tight selection:bg-accent-500/30 selection:text-white">
+
+  <!-- Animated gradient blobs -->
+  <div aria-hidden="true" class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+    <div class="blob blob-a"></div>
+    <div class="blob blob-b"></div>
+    <div class="blob blob-c"></div>
+  </div>
+
+  <main class="mx-auto max-w-3xl px-5 sm:px-6 py-14 sm:py-20">
+
+    <!-- Header -->
+    <header class="text-center mb-12 sm:mb-16">
+      <div class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] text-slate-300 backdrop-blur-xl">
+        <span class="relative flex h-1.5 w-1.5">
+          <span class="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60 animate-ping"></span>
+          <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+        </span>
+        <span class="tracking-wide">Powered by Groq · Llama 3.3</span>
+      </div>
+      <h1 class="mt-6 text-[44px] sm:text-6xl font-display font-bold tracking-tightest leading-[1.05]">
+        <span class="bg-gradient-to-b from-white via-white to-slate-400 bg-clip-text text-transparent">
+          Rifat
+        </span>
+        <span class="bg-gradient-to-r from-accent-400 via-accent-500 to-accent-300 bg-clip-text text-transparent">
+          Ai
+        </span>
+        <span class="bg-gradient-to-b from-white via-white to-slate-400 bg-clip-text text-transparent">
+          Model
+        </span>
+      </h1>
+      <p class="mt-4 text-slate-400 text-[15px] sm:text-lg max-w-xl mx-auto leading-relaxed">
+        Paste any number of X post links — get tailored, on-brand replies in one click.
+      </p>
+
+      <!-- Install app (PWA) — appears only when installable -->
+      <button id="install-app" type="button" hidden
+              class="mt-6 inline-flex items-center gap-2 btn-pill btn-pill-accent px-4 py-2 text-[13px] font-medium">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3v12"/>
+          <path d="m7 10 5 5 5-5"/>
+          <path d="M5 21h14"/>
+        </svg>
+        <span>Install app</span>
+      </button>
+      <p id="install-hint" class="mt-3 text-[12px] text-slate-500" hidden>
+        On iPhone: tap <span class="text-slate-300">Share</span> → <span class="text-slate-300">Add to Home Screen</span>.
+      </p>
+    </header>
+
+    <!-- Tab nav: Generate Replies | Find Contests | Tools -->
+    <nav class="mb-6 flex justify-center">
+      <div role="tablist" class="glass rounded-full p-1 inline-flex gap-1 flex-wrap">
+        <button id="tab-generate" role="tab" aria-selected="true"
+          class="tab-pill tab-pill-active px-4 sm:px-5 py-2 text-[13px] font-medium rounded-full transition-all duration-200 ease-ios">
+          Generate Replies
+        </button>
+        <button id="tab-contests" role="tab" aria-selected="false"
+          class="tab-pill px-4 sm:px-5 py-2 text-[13px] font-medium rounded-full transition-all duration-200 ease-ios">
+          Find Contests
+          <span class="ml-1.5 inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold tracking-wider bg-emerald-500/20 text-emerald-300 uppercase">Live</span>
+        </button>
+        <button id="tab-tools" role="tab" aria-selected="false"
+          class="tab-pill px-4 sm:px-5 py-2 text-[13px] font-medium rounded-full transition-all duration-200 ease-ios">
+          Tools
+        </button>
+      </div>
+    </nav>
+
+    <!-- ==================== PANEL: GENERATE REPLIES ==================== -->
+    <div id="panel-generate">
+
+    <!-- Input card -->
+    <section class="glass rounded-3xl p-6 sm:p-8 shadow-card">
+      <form id="generate-form" class="space-y-5" novalidate>
+        <div class="flex items-center justify-between">
+          <label for="urls" class="block text-[13px] font-medium text-slate-200">X post URLs <span class="text-slate-500 font-normal">· one per line</span></label>
+          <div class="flex items-center gap-2">
+            <span id="url-preview-badge"
+              class="hidden text-[10px] font-medium tabular-nums px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/20">
+            </span>
+            <span id="url-count" class="text-[11px] tabular-nums text-slate-500">0 URLs</span>
+          </div>
+        </div>
+        <textarea
+          id="urls" name="urls" required autocomplete="off" spellcheck="false" rows="6"
+          placeholder="https://x.com/username/status/1234567890&#10;https://x.com/another/status/9876543210&#10;Paste any number of X post URLs…"
+          class="w-full rounded-2xl bg-ink-800/70 border border-white/10 px-4 py-3.5 text-slate-100 placeholder:text-slate-500 outline-none focus:border-accent-500/60 focus:shadow-ring transition-all duration-200 ease-ios font-mono text-[13px] leading-relaxed resize-y"
+        ></textarea>
+
+        <!-- Selectors row -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <label for="lang" class="block text-[10.5px] uppercase tracking-[0.12em] text-slate-500 mb-1.5">Language</label>
+            <select id="lang" class="select-ios">
+              <option value="auto">Auto</option>
+              <option value="en">English</option>
+              <option value="bn">Bengali</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="tone" class="block text-[10.5px] uppercase tracking-[0.12em] text-slate-500 mb-1.5">Tone</label>
+            <select id="tone" class="select-ios">
+              {% for t in tones %}
+              <option value="{{ t }}" {% if t == "witty" %}selected{% endif %}>{{ t|capitalize }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <label for="length" class="block text-[10.5px] uppercase tracking-[0.12em] text-slate-500 mb-1.5">Length</label>
+            <select id="length" class="select-ios">
+              {% for l in lengths %}
+              <option value="{{ l }}" {% if l == "medium" %}selected{% endif %}>{{ l|capitalize }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-span-2 sm:col-span-1">
+            <label for="variants" class="block text-[10.5px] uppercase tracking-[0.12em] text-slate-500 mb-1.5" title="Lower = uses less Groq quota per post">Variants</label>
+            <select id="variants" class="select-ios">
+              <option value="1">1 (least quota)</option>
+              <option value="2" selected>2 (balanced)</option>
+              <option value="3">3 (most variety)</option>
+            </select>
+          </div>
+        </div>
+
+        <button
+          id="submit-btn" type="submit"
+          class="btn-primary group relative w-full inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-[15px] font-semibold text-white"
+        >
+          <span id="btn-label" class="inline-flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m12 3 1.9 5.8L20 11l-5.8 1.9L12 19l-1.9-6.1L4 11l6.1-2.2z"/>
+            </svg>
+            <span id="btn-label-text">Generate Comments</span>
+          </span>
+          <span id="btn-spinner" class="hidden items-center gap-2">
+            <span class="spinner"></span>
+            Generating…
+          </span>
+          <span class="hidden sm:inline-flex absolute right-4 items-center gap-1 text-[11px] text-white/70">
+            <kbd class="kbd kbd-on-blue" id="kbd-mod">⌘</kbd><kbd class="kbd kbd-on-blue">↵</kbd>
+          </span>
+        </button>
+      </form>
+
+      <div id="error-box" class="hidden mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/[0.08] px-4 py-3 text-[13px] text-rose-200">
+        <span id="error-text"></span>
+      </div>
+    </section>
+
+    <!-- Results -->
+    <section id="results" class="hidden mt-10 space-y-6">
+      <!-- Bulk progress bar -->
+      <div id="progress-wrap" class="hidden glass rounded-2xl p-4">
+        <div class="flex items-center justify-between text-[13px] text-slate-300 mb-2.5">
+          <span class="font-medium tabular-nums"><span id="progress-done">0</span> / <span id="progress-total">0</span> posts</span>
+          <span id="progress-stats" class="text-[11px] text-slate-500 tabular-nums"></span>
+        </div>
+        <div class="h-1 w-full rounded-full bg-white/[0.06] overflow-hidden">
+          <div id="progress-fill" class="h-full bg-gradient-to-r from-accent-400 to-accent-500 transition-all duration-500 ease-ios" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Failed-links summary (populated as failures happen) -->
+      <details id="failed-wrap" class="hidden glass rounded-2xl p-4 border-rose-500/25 bg-rose-950/20" open>
+        <summary class="flex items-center justify-between gap-3 cursor-pointer select-none">
+          <span class="flex items-center gap-2 text-[13px] text-rose-200">
+            <span class="inline-block h-1.5 w-1.5 rounded-full bg-rose-400"></span>
+            <span class="font-medium"><span id="failed-count">0</span> link<span id="failed-plural">s</span> failed</span>
+          </span>
+          <span class="flex items-center gap-2">
+            <button type="button" id="failed-retry"
+              class="btn-pill btn-pill-emerald inline-flex items-center gap-1.5 px-3 py-1.5 text-[11.5px] disabled:opacity-50 disabled:cursor-not-allowed">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>
+              </svg>
+              <span id="failed-retry-label">Retry all failed</span>
+            </button>
+            <button type="button" id="failed-copy"
+              class="btn-pill btn-pill-rose inline-flex items-center gap-1.5 px-3 py-1.5 text-[11.5px]">
+              Copy URLs
+            </button>
+          </span>
+        </summary>
+        <ul id="failed-list" class="mt-3 space-y-2"></ul>
+      </details>
+
+      <!-- One post block per URL, populated by JS -->
+      <div id="posts-list" class="space-y-5"></div>
+    </section>
+
+    <!-- History (sibling of #results so it's reachable on first page load) -->
+    <section id="history-wrap" class="hidden mt-10">
+      <header class="flex items-center justify-between mb-3 px-1">
+        <h3 class="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-slate-500">Recent</h3>
+        <button id="history-clear" class="text-[11px] text-slate-500 hover:text-rose-300 transition-colors">Clear</button>
+      </header>
+      <ul id="history-list" class="space-y-2"></ul>
+    </section>
+
+    </div><!-- /panel-generate -->
+
+    <!-- ==================== PANEL: FIND CONTESTS ==================== -->
+    <div id="panel-contests" class="hidden">
+      <section class="glass rounded-3xl p-6 sm:p-8 shadow-card">
+        <form id="contest-form" class="space-y-5" novalidate>
+          <div class="flex items-center justify-between">
+            <label class="block text-[13px] font-medium text-slate-200">
+              Discover running contests on X
+              <span class="text-slate-500 font-normal">· ranked by engagement</span>
+            </label>
+          </div>
+
+          <!-- Mode toggle -->
+          <div class="flex items-center gap-2 p-1 rounded-2xl bg-ink-800/70 border border-white/[0.07]">
+            <button type="button" data-mode="ai"
+              class="contest-mode-btn contest-mode-active flex-1 px-3 py-2.5 text-[13px] font-medium rounded-xl transition-all duration-200 ease-ios">
+              AI contests
+            </button>
+            <button type="button" data-mode="all"
+              class="contest-mode-btn flex-1 px-3 py-2.5 text-[13px] font-medium rounded-xl transition-all duration-200 ease-ios">
+              All contests
+            </button>
+            <button type="button" data-mode="custom"
+              class="contest-mode-btn flex-1 px-3 py-2.5 text-[13px] font-medium rounded-xl transition-all duration-200 ease-ios">
+              Custom
+            </button>
+          </div>
+
+          <!-- Custom queries (shown only when mode=custom) -->
+          <div id="contest-custom-wrap" class="hidden">
+            <label for="contest-custom" class="block text-[10.5px] uppercase tracking-[0.12em] text-slate-500 mb-1.5">Custom search queries · one per line</label>
+            <textarea id="contest-custom" rows="3" autocomplete="off" spellcheck="false"
+              placeholder="crypto trading contest min_faves:50 -filter:replies&#10;NFT giveaway prize&#10;solana hackathon"
+              class="w-full rounded-2xl bg-ink-800/70 border border-white/10 px-4 py-3 text-slate-100 placeholder:text-slate-500 outline-none focus:border-accent-500/60 focus:shadow-ring transition-all duration-200 ease-ios font-mono text-[12.5px] leading-relaxed resize-y"></textarea>
+          </div>
+
+          <!-- Filters row -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div>
+              <label for="contest-recency" class="block text-[10.5px] uppercase tracking-[0.12em] text-slate-500 mb-1.5">Recency</label>
+              <select id="contest-recency" class="select-ios">
+                <option value="24">Last 24 h</option>
+                <option value="72" selected>Last 3 days</option>
+                <option value="168">Last 7 days</option>
+                <option value="720">Last 30 days</option>
+              </select>
+            </div>
+            <div>
+              <label for="contest-min-eng" class="block text-[10.5px] uppercase tracking-[0.12em] text-slate-500 mb-1.5">Min engagement</label>
+              <select id="contest-min-eng" class="select-ios">
+                <option value="0">Any</option>
+                <option value="50" selected>50+</option>
+                <option value="200">200+</option>
+                <option value="1000">1000+</option>
+              </select>
+            </div>
+            <div>
+              <label for="contest-limit" class="block text-[10.5px] uppercase tracking-[0.12em] text-slate-500 mb-1.5">Show top</label>
+              <select id="contest-limit" class="select-ios">
+                <option value="15">15</option>
+                <option value="30" selected>30</option>
+                <option value="60">60</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+            <div>
+              <label for="contest-strict" class="block text-[10.5px] uppercase tracking-[0.12em] text-slate-500 mb-1.5" title="Drop tweets that don't visibly look like contests">Filter</label>
+              <select id="contest-strict" class="select-ios">
+                <option value="1" selected>Strict</option>
+                <option value="0">Loose</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Submit + auto-refresh -->
+          <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+            <button id="contest-submit" type="submit"
+              class="btn-primary group relative flex-1 inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-[15px] font-semibold text-white">
+              <span id="contest-btn-label" class="inline-flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
+                </svg>
+                <span>Find contests</span>
+              </span>
+              <span id="contest-btn-spinner" class="hidden items-center gap-2">
+                <span class="spinner"></span>
+                Searching X…
+              </span>
+            </button>
+            <label class="inline-flex items-center gap-2.5 px-3 py-2.5 rounded-2xl bg-ink-800/70 border border-white/[0.07] text-[12.5px] text-slate-300 select-none cursor-pointer">
+              <input id="contest-autorefresh" type="checkbox" class="accent-accent-500" />
+              <span>Live refresh · 60s</span>
+            </label>
+          </div>
+        </form>
+
+        <div id="contest-error" class="hidden mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/[0.08] px-4 py-3 text-[13px] text-rose-200"></div>
+      </section>
+
+      <!-- Contest results -->
+      <section id="contest-results-wrap" class="hidden mt-8 space-y-4">
+        <div class="flex items-center justify-between px-1">
+          <h3 class="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+            <span id="contest-result-count">0</span> contest<span id="contest-result-plural">s</span> found
+          </h3>
+          <span id="contest-result-meta" class="text-[11px] tabular-nums text-slate-500"></span>
+        </div>
+        <div id="contest-list" class="space-y-3"></div>
+      </section>
+
+      <section id="contest-empty" class="hidden mt-8 glass rounded-2xl p-6 text-center text-[13px] text-slate-400">
+        No contests matched. Try widening the time window, lowering the engagement threshold, or switching to <span class="text-slate-200">All contests</span> mode.
+      </section>
+    </div><!-- /panel-contests -->
+
+    <!-- ==================== PANEL: TOOLS ==================== -->
+    <div id="panel-tools" class="hidden space-y-6">
+
+      <!-- Image → PDF -->
+      <section class="glass rounded-3xl p-6 sm:p-8 shadow-card">
+        <header class="flex items-start justify-between gap-3 mb-5">
+          <div>
+            <h3 class="text-[15px] font-semibold text-slate-100">Image → PDF</h3>
+            <p class="mt-1 text-[12.5px] text-slate-400">
+              Combine images into a single PDF. Drag to reorder. Runs entirely in your browser — nothing uploaded.
+            </p>
+          </div>
+          <span class="shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/20">Offline</span>
+        </header>
+
+        <label id="pdf-drop" for="pdf-files"
+          class="block cursor-pointer rounded-2xl border-2 border-dashed border-white/10 bg-ink-800/40 hover:border-accent-500/40 hover:bg-ink-800/60 transition-colors p-6 text-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-7 w-7 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="m21 15-5-5L5 21"/>
+          </svg>
+          <p class="mt-2 text-[13px] text-slate-300">Drop images here or <span class="text-accent-400 underline-offset-4 hover:underline">browse</span></p>
+          <p class="mt-1 text-[11px] text-slate-500">JPG, PNG, WebP, HEIC · multiple allowed</p>
+          <input id="pdf-files" type="file" accept="image/*" multiple class="sr-only" />
+        </label>
+
+        <ul id="pdf-list" class="mt-4 space-y-2 hidden"></ul>
+
+        <div id="pdf-actions" class="mt-5 hidden flex flex-col sm:flex-row sm:items-center gap-3">
+          <div class="flex-1">
+            <label for="pdf-page-size" class="block text-[10.5px] uppercase tracking-[0.12em] text-slate-500 mb-1.5">Page size</label>
+            <select id="pdf-page-size" class="select-ios">
+              <option value="a4" selected>A4</option>
+              <option value="letter">Letter</option>
+              <option value="fit">Fit to image</option>
+            </select>
+          </div>
+          <div class="flex-1">
+            <label for="pdf-orientation" class="block text-[10.5px] uppercase tracking-[0.12em] text-slate-500 mb-1.5">Orientation</label>
+            <select id="pdf-orientation" class="select-ios">
+              <option value="auto" selected>Auto</option>
+              <option value="portrait">Portrait</option>
+              <option value="landscape">Landscape</option>
+            </select>
+          </div>
+          <button id="pdf-build" type="button"
+            class="btn-primary group relative inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-[14px] font-semibold text-white">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-[16px] w-[16px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            <span>Download PDF</span>
+          </button>
+        </div>
+
+        <p id="pdf-status" class="mt-3 text-[12px] text-slate-400 hidden"></p>
+        <p id="pdf-error" class="mt-3 text-[12px] text-rose-300 hidden"></p>
+      </section>
+
+      <!-- Image → Text (OCR) -->
+      <section class="glass rounded-3xl p-6 sm:p-8 shadow-card">
+        <header class="flex items-start justify-between gap-3 mb-5">
+          <div>
+            <h3 class="text-[15px] font-semibold text-slate-100">Image → Text</h3>
+            <p class="mt-1 text-[12.5px] text-slate-400">
+              Extract text from screenshots, photos, receipts, handwriting. Powered by Groq vision — fast and multilingual.
+            </p>
+          </div>
+          <span class="shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full bg-accent-500/15 text-accent-300 border border-accent-500/20">Groq</span>
+        </header>
+
+        <label id="ocr-drop" for="ocr-file"
+          class="block cursor-pointer rounded-2xl border-2 border-dashed border-white/10 bg-ink-800/40 hover:border-accent-500/40 hover:bg-ink-800/60 transition-colors p-6 text-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-7 w-7 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 7V5a2 2 0 0 1 2-2h2"/><path d="M16 3h2a2 2 0 0 1 2 2v2"/><path d="M20 17v2a2 2 0 0 1-2 2h-2"/><path d="M8 21H6a2 2 0 0 1-2-2v-2"/><path d="M7 9h10v6H7z"/>
+          </svg>
+          <p class="mt-2 text-[13px] text-slate-300">Drop one image, paste from clipboard, or <span class="text-accent-400 underline-offset-4 hover:underline">browse</span></p>
+          <p class="mt-1 text-[11px] text-slate-500">JPG, PNG, WebP · max 4 MB · auto-resized for speed</p>
+          <input id="ocr-file" type="file" accept="image/*" class="sr-only" />
+        </label>
+
+        <div id="ocr-preview-wrap" class="mt-4 hidden">
+          <div class="flex items-center gap-3">
+            <img id="ocr-preview" class="h-16 w-16 object-cover rounded-xl border border-white/10" alt="" />
+            <div class="min-w-0 flex-1">
+              <p id="ocr-filename" class="text-[13px] text-slate-200 truncate"></p>
+              <p id="ocr-filesize" class="text-[11px] text-slate-500"></p>
+            </div>
+            <button id="ocr-clear" type="button" class="btn-ghost text-[12px] px-3 py-1.5">Remove</button>
+          </div>
+          <button id="ocr-extract" type="button"
+            class="btn-primary group relative mt-4 w-full inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-[14px] font-semibold text-white">
+            <span id="ocr-extract-label" class="inline-flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-[16px] w-[16px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 9h10M7 12h10M7 15h6"/>
+              </svg>
+              <span>Extract text</span>
+            </span>
+            <svg id="ocr-extract-spinner" class="hidden h-[16px] w-[16px] animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-30" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z"/>
+            </svg>
+          </button>
+        </div>
+
+        <div id="ocr-result-wrap" class="mt-5 hidden">
+          <label for="ocr-result" class="block text-[10.5px] uppercase tracking-[0.12em] text-slate-500 mb-1.5">Extracted text</label>
+          <textarea id="ocr-result" rows="8" spellcheck="false"
+            class="w-full rounded-2xl bg-ink-800/70 border border-white/10 px-4 py-3 text-slate-100 outline-none focus:border-accent-500/60 focus:shadow-ring transition-all duration-200 ease-ios font-mono text-[13px] leading-relaxed resize-y"></textarea>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <button id="ocr-copy" type="button" class="btn-ghost inline-flex items-center gap-1.5 px-3 py-1.5 text-[12.5px]">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span>Copy</span>
+            </button>
+            <button id="ocr-download" type="button" class="btn-ghost inline-flex items-center gap-1.5 px-3 py-1.5 text-[12.5px]">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>Download .txt</span>
+            </button>
+            <button id="ocr-to-generate" type="button" class="btn-pill btn-pill-accent inline-flex items-center gap-1.5 px-3 py-1.5 text-[12.5px]">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 5.8L20 11l-5.8 1.9L12 19l-1.9-6.1L4 11l6.1-2.2z"/></svg>
+              <span>Generate replies for this</span>
+            </button>
+          </div>
+        </div>
+
+        <p id="ocr-status" class="mt-3 text-[12px] text-slate-400 hidden"></p>
+        <p id="ocr-error" class="mt-3 text-[12px] text-rose-300 hidden"></p>
+      </section>
+
+    </div><!-- /panel-tools -->
+
+    <footer class="mt-16 text-center text-[11px] text-slate-600">
+      <span>FastAPI · twscrape · Groq</span>
+      <span class="mx-2 text-slate-700">·</span>
+      <span>Use responsibly</span>
+    </footer>
+  </main>
+
+  <!-- Post block template: one per URL submitted -->
+  <template id="post-template">
+    <section class="post-block glass rounded-3xl p-5 sm:p-7 space-y-5 shadow-card">
+      <!-- Original post header -->
+      <article>
+        <header class="flex items-center justify-between gap-3 mb-3">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="h-10 w-10 shrink-0 rounded-full bg-gradient-to-br from-accent-400 to-accent-600 ring-1 ring-white/10"></div>
+            <div class="min-w-0">
+              <p class="post-author-name font-semibold truncate text-[15px]"></p>
+              <p class="post-author-handle text-[13px] text-slate-500 truncate"></p>
+            </div>
+          </div>
+          <a class="post-link text-[12.5px] text-accent-400 hover:text-accent-300 transition-colors flex items-center gap-1"
+             href="#" target="_blank" rel="noopener noreferrer">
+            View on X
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>
+          </a>
+        </header>
+        <p class="post-text whitespace-pre-wrap text-slate-200 leading-relaxed text-[15px]"></p>
+      </article>
+
+      <!-- Status row: pending / loading / error / done -->
+      <div class="post-status flex items-center justify-between gap-3 border-t border-white/[0.06] pt-4">
+        <div class="flex items-center gap-2 text-[13px] min-w-0">
+          <span class="post-status-icon shrink-0"></span>
+          <span class="post-status-text text-slate-400 truncate"></span>
+        </div>
+        <button type="button"
+          class="post-regen-btn btn-ghost hidden inline-flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] disabled:opacity-50 disabled:cursor-not-allowed">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>
+          </svg>
+          <span class="post-regen-label">Regenerate</span>
+        </button>
+      </div>
+
+      <!-- Variants for this post -->
+      <div class="post-variants grid grid-cols-1 gap-3"></div>
+    </section>
+  </template>
+
+  <!-- Variant template (cloned by JS) -->
+  <template id="variant-template">
+    <article class="variant rounded-2xl border border-white/[0.07] bg-ink-800/60 backdrop-blur-xl p-5 sm:p-6 shadow-soft hover:border-white/[0.12] transition-colors">
+      <header class="flex items-center justify-between mb-3">
+        <span class="variant-badge text-[10.5px] font-semibold uppercase tracking-[0.12em] text-accent-400">Variant</span>
+        <span class="variant-counter text-[11px] tabular-nums text-slate-500">0 / 280</span>
+      </header>
+
+      <div class="variant-text whitespace-pre-wrap text-slate-100 text-[17px] leading-relaxed outline-none focus:bg-ink-700/40 rounded-lg p-2 -mx-1 transition-colors"
+           contenteditable="true" spellcheck="true"></div>
+
+      <div class="mt-4 flex flex-wrap items-center gap-2">
+        <button class="copy-btn btn-ghost inline-flex items-center gap-1.5 px-3 py-1.5 text-[12.5px]">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          <span class="copy-label">Copy</span>
+        </button>
+
+        <a class="reply-btn btn-pill btn-pill-accent inline-flex items-center gap-1.5 px-3 py-1.5 text-[12.5px]"
+           href="#" target="_blank" rel="noopener noreferrer">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+          </svg>
+          Reply on X
+        </a>
+
+        <span class="ml-auto text-[11px] text-slate-500">Edit before posting</span>
+      </div>
+    </article>
+  </template>
+
+  <!-- Contest card template -->
+  <template id="contest-template">
+    <article class="contest-card glass rounded-2xl p-5 sm:p-6 shadow-card hover:shadow-lift transition-all duration-300 ease-ios">
+      <header class="flex items-start justify-between gap-3 mb-3">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="h-8 w-8 shrink-0 rounded-full bg-gradient-to-br from-accent-400 to-accent-600 ring-1 ring-white/10"></div>
+          <div class="min-w-0">
+            <p class="contest-author-name font-semibold truncate text-[14px]"></p>
+            <p class="contest-author-handle text-[12px] text-slate-500 truncate"></p>
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <span class="contest-type-badge text-[10px] font-semibold uppercase tracking-[0.12em] px-2 py-0.5 rounded-full"></span>
+        </div>
+      </header>
+
+      <p class="contest-text whitespace-pre-wrap text-slate-200 leading-relaxed text-[14px] mb-4"></p>
+
+      <!-- Engagement strip -->
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px] text-slate-400 tabular-nums border-t border-white/[0.05] pt-3">
+        <span class="flex items-center gap-1.5" title="Likes">
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          <span class="contest-likes">0</span>
+        </span>
+        <span class="flex items-center gap-1.5" title="Retweets">
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m17 1 4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="m7 23-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          <span class="contest-retweets">0</span>
+        </span>
+        <span class="flex items-center gap-1.5" title="Replies">
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span class="contest-replies">0</span>
+        </span>
+        <span class="flex items-center gap-1.5" title="Views">
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span class="contest-views">0</span>
+        </span>
+        <span class="contest-age ml-auto text-slate-500"></span>
+      </div>
+
+      <!-- Score + deadline + actions -->
+      <div class="mt-3 flex flex-wrap items-center gap-2 pt-3 border-t border-white/[0.05]">
+        <span class="contest-score inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-accent-500/15 text-accent-300" title="Engagement score">
+          <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m13 2-3 7h7l-9 13 3-9H4z"/></svg>
+          <span class="contest-score-val">0</span>
+        </span>
+        <span class="contest-deadline hidden items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-500/15 text-amber-300">
+          <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <span class="contest-deadline-val"></span>
+        </span>
+        <a class="contest-link ml-auto text-[12px] text-accent-400 hover:text-accent-300 transition-colors flex items-center gap-1"
+           href="#" target="_blank" rel="noopener noreferrer">
+          View on X
+          <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>
+        </a>
+        <button type="button"
+          class="contest-reply-btn btn-pill btn-pill-accent inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium">
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          Generate reply
+        </button>
+      </div>
+    </article>
+  </template>
+
+  <!-- Toast -->
+  <div id="toast" class="toast fixed bottom-8 left-1/2 -translate-x-1/2 hidden rounded-full bg-ink-700/95 backdrop-blur-xl border border-white/10 px-4 py-2 text-[13px] font-medium text-white shadow-lift">
+    Copied to clipboard
+  </div>
+</body>
+</html>

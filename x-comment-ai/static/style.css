@@ -1,0 +1,421 @@
+/* static/style.css
+   Premium-tier polish: iOS-style glass surfaces, layered shadows,
+   tactile buttons, and subtle motion.
+*/
+
+:root {
+  color-scheme: dark;
+  /* Brand tokens (mirror of tailwind.config in index.html). */
+  --bg:           #0B0F1A;
+  --accent:       #3B82F6;
+  --accent-hover: #60A5FA;
+  --accent-press: #2563EB;
+  --success:      #10B981;
+  --ease-ios:     cubic-bezier(0.32, 0.72, 0, 1);
+  /* Legacy aliases kept for any third-party utilities still using them. */
+  --ios-blue:        var(--accent);
+  --ios-blue-press:  var(--accent-press);
+}
+
+html, body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* PWA: respect iOS notch / home-indicator safe areas in standalone mode. */
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left:  env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+@media (display-mode: standalone) {
+  /* In installed/standalone mode, give the hero a bit more breathing room
+     under the iOS status bar. */
+  main { padding-top: max(env(safe-area-inset-top), 24px); }
+}
+
+/* All headings use Sora (geometric, bold) loaded via Google Fonts; body stays
+   Inter for clean small-text rendering. Tightest tracking only on display
+   sizes so 10–13px label headings stay readable. */
+h1, h2, h3, h4, h5, h6,
+.font-display {
+  font-family: 'Sora', 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+}
+h1, h2 { letter-spacing: -0.035em; }
+h3 { letter-spacing: -0.02em; }
+/* Tab labels also pick up Sora for visual rhythm with the panel headings. */
+.tab-pill { font-family: 'Sora', 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+
+/* ---------- Glass material ---------- */
+.glass {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.030), rgba(255,255,255,0)) ,
+    rgba(15, 20, 34, 0.70);
+  backdrop-filter: saturate(140%) blur(24px);
+  -webkit-backdrop-filter: saturate(140%) blur(24px);
+  border: 1px solid rgba(255,255,255,0.08);
+  transition: border-color 220ms var(--ease-ios), box-shadow 220ms var(--ease-ios), transform 220ms var(--ease-ios);
+}
+.glass:hover {
+  border-color: rgba(59, 130, 246, 0.18);
+}
+
+/* ---------- Animated background blobs (toned down) ---------- */
+.blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(110px);
+  opacity: 0.30;
+  will-change: transform;
+}
+.blob-a {
+  top: -15%; left: -12%;
+  width: 520px; height: 520px;
+  background: radial-gradient(circle at 30% 30%, var(--accent), transparent 60%);
+  animation: float-a 28s ease-in-out infinite;
+}
+.blob-b {
+  bottom: -20%; right: -12%;
+  width: 560px; height: 560px;
+  background: radial-gradient(circle at 70% 70%, var(--success), transparent 60%);
+  animation: float-b 32s ease-in-out infinite;
+  opacity: 0.18;
+}
+.blob-c {
+  top: 45%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 420px; height: 420px;
+  background: radial-gradient(circle, var(--accent), transparent 60%);
+  animation: float-c 36s ease-in-out infinite;
+  opacity: 0.16;
+}
+@keyframes float-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(40px, 30px) scale(1.06); }
+}
+@keyframes float-b {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(-50px, -30px) scale(1.08); }
+}
+@keyframes float-c {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50%      { transform: translate(-45%, -55%) scale(1.10); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .blob, .blob-a, .blob-b, .blob-c { animation: none !important; }
+}
+
+/* ---------- Primary button (Accent Blue with soft glow) ---------- */
+.btn-primary {
+  background: linear-gradient(180deg, var(--accent-hover) 0%, var(--accent) 100%);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.18) inset,
+    0 0 0 1px rgba(255,255,255,0.05),
+    0 10px 28px -8px rgba(59, 130, 246, 0.55),
+    0 4px 10px -2px rgba(0, 0, 0, 0.4);
+  transition: transform 200ms var(--ease-ios), box-shadow 200ms var(--ease-ios), background 200ms var(--ease-ios);
+}
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #7AAEFA 0%, var(--accent-hover) 100%);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.22) inset,
+    0 0 0 1px rgba(255,255,255,0.08),
+    0 14px 36px -8px rgba(59, 130, 246, 0.75),
+    0 0 24px rgba(59, 130, 246, 0.45),
+    0 6px 14px -4px rgba(0, 0, 0, 0.45);
+}
+.btn-primary:active:not(:disabled) {
+  transform: scale(0.985);
+  background: linear-gradient(180deg, var(--accent-press) 0%, #1E40AF 100%);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.10) inset,
+    0 0 0 1px rgba(255,255,255,0.04),
+    0 4px 10px -2px rgba(59, 130, 246, 0.4);
+}
+.btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: saturate(0.6);
+}
+
+/* ---------- Pill buttons (secondary actions) ---------- */
+.btn-pill {
+  border-radius: 9999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  color: rgb(226, 232, 240);
+  transition: background 160ms var(--ease-ios), border-color 160ms var(--ease-ios), transform 160ms var(--ease-ios);
+}
+.btn-pill:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.16); }
+.btn-pill:active { transform: scale(0.97); }
+
+.btn-pill-accent {
+  border-color: rgba(59, 130, 246, 0.32);
+  background: rgba(59, 130, 246, 0.10);
+  color: #93C5FD;
+}
+.btn-pill-accent:hover {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.50);
+  color: #BFDBFE;
+  box-shadow: 0 0 16px rgba(59, 130, 246, 0.25);
+}
+
+.btn-pill-emerald {
+  border-color: rgba(16, 185, 129, 0.32);
+  background: rgba(16, 185, 129, 0.10);
+  color: rgb(167, 243, 208);
+}
+.btn-pill-emerald:hover { background: rgba(16, 185, 129, 0.18); border-color: rgba(16, 185, 129, 0.45); }
+
+.btn-pill-rose {
+  border-color: rgba(244, 63, 94, 0.32);
+  background: rgba(244, 63, 94, 0.10);
+  color: rgb(254, 205, 211);
+}
+.btn-pill-rose:hover { background: rgba(244, 63, 94, 0.18); border-color: rgba(244, 63, 94, 0.45); }
+
+/* ---------- Ghost button (used by Copy / Regenerate) ---------- */
+.btn-ghost {
+  border-radius: 9999px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  color: rgb(203, 213, 225);
+  transition: background 160ms var(--ease-ios), border-color 160ms var(--ease-ios), transform 160ms var(--ease-ios);
+}
+.btn-ghost:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.14); color: rgb(241, 245, 249); }
+.btn-ghost:active { transform: scale(0.97); }
+
+/* ---------- iOS-style select ---------- */
+.select-ios {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  border-radius: 14px;
+  background-color: rgba(17, 20, 28, 0.7);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: rgb(226, 232, 240);
+  padding: 10px 36px 10px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  outline: none;
+  transition: border-color 160ms var(--ease-ios), box-shadow 160ms var(--ease-ios), background-color 160ms var(--ease-ios);
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='m6 9 6 6 6-6'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px;
+  cursor: pointer;
+}
+.select-ios:hover { background-color: rgba(20, 24, 34, 0.8); border-color: rgba(255,255,255,0.14); }
+.select-ios:focus {
+  border-color: rgba(10, 132, 255, 0.55);
+  box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.18);
+}
+
+/* ---------- Spinner ---------- */
+.spinner {
+  display: inline-block;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.30);
+  border-top-color: #ffffff;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- Skeleton loading shimmer ---------- */
+.skeleton {
+  display: inline-block;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.10) 50%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 6px;
+  color: transparent;
+  user-select: none;
+  pointer-events: none;
+  vertical-align: middle;
+}
+.skeleton-line   { height: 0.9em; }
+.skeleton-line-sm { height: 0.78em; }
+.skeleton-block  { display: block; height: 0.9em; margin: 0.3em 0; }
+
+.skeleton-variant {
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(17, 20, 28, 0.55);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: variant-in 0.3s var(--ease-ios) both;
+}
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; opacity: 0.4; }
+}
+
+/* ---------- Keyboard cap (kbd) chip used by the shortcut sheet ---------- */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  margin-left: 2px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgb(226, 232, 240);
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+}
+
+/* Floating help button hover */
+#shortcut-help-btn:hover { background: rgba(10, 132, 255, 0.18); }
+
+/* Variant on the iOS-blue submit button — translucent white chips */
+.kbd-on-blue {
+  border-color: rgba(255, 255, 255, 0.30);
+  background: rgba(255, 255, 255, 0.18);
+  color: white;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.12);
+}
+
+/* ---------- Reveal animations ---------- */
+#results:not(.hidden) {
+  animation: fade-up 0.5s var(--ease-ios) both;
+}
+.post-block { animation: fade-up 0.45s var(--ease-ios) both; }
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.variant { animation: variant-in 0.45s var(--ease-ios) both; }
+.variant:nth-child(2) { animation-delay: 0.06s; }
+.variant:nth-child(3) { animation-delay: 0.12s; }
+@keyframes variant-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ---------- Toast ---------- */
+.toast { animation: toast-in 0.32s var(--ease-ios); }
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ---------- Char counter colour states ---------- */
+.variant-counter.warn   { color: #fbbf24; }
+.variant-counter.danger { color: #f87171; font-weight: 600; }
+
+/* ---------- Shake on error ---------- */
+.shake { animation: shake 0.45s ease-in-out; }
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-5px); }
+  40%      { transform: translateX(5px); }
+  60%      { transform: translateX(-3px); }
+  80%      { transform: translateX(3px); }
+}
+
+/* ---------- Custom scrollbar ---------- */
+@media (pointer: fine) {
+  ::-webkit-scrollbar       { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.14); background-clip: padding-box; }
+}
+
+/* ---------- contenteditable placeholder ---------- */
+.variant-text:empty::before {
+  content: attr(data-placeholder);
+  color: rgba(148, 163, 184, 0.6);
+}
+
+/* ---------- Status icon dots (used by JS setStatus) ---------- */
+.post-status-icon { display: inline-block; width: 8px; height: 8px; border-radius: 9999px; }
+.post-status-icon.pending { background: rgb(148, 163, 184); }
+.post-status-icon.loading {
+  background: var(--ios-blue);
+  box-shadow: 0 0 0 0 rgba(10, 132, 255, 0.6);
+  animation: pulse-ring 1.4s ease-out infinite;
+}
+.post-status-icon.done    { background: #34d399; }
+.post-status-icon.error   { background: #fb7185; }
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(10, 132, 255, 0.55); }
+  100% { box-shadow: 0 0 0 10px rgba(10, 132, 255, 0); }
+}
+
+/* ---------- History list items refined hover ---------- */
+#history-list li {
+  transition: background 160ms var(--ease-ios), border-color 160ms var(--ease-ios), transform 160ms var(--ease-ios);
+}
+#history-list li:hover { transform: translateY(-1px); }
+
+/* ---------- Tab nav (Generate | Find Contests) ---------- */
+.tab-pill {
+  color: rgb(148, 163, 184);
+  background: transparent;
+  border: 1px solid transparent;
+}
+.tab-pill:hover { color: rgb(226, 232, 240); }
+.tab-pill-active {
+  color: white;
+  background: rgba(10, 132, 255, 0.18);
+  border-color: rgba(10, 132, 255, 0.32);
+  box-shadow: 0 4px 12px -4px rgba(10, 132, 255, 0.45);
+}
+
+/* ---------- Contest mode segmented control ---------- */
+.contest-mode-btn {
+  color: rgb(148, 163, 184);
+  background: transparent;
+  border: 1px solid transparent;
+}
+.contest-mode-btn:hover { color: rgb(226, 232, 240); background: rgba(255,255,255,0.03); }
+.contest-mode-active {
+  color: white;
+  background: linear-gradient(180deg, #1b91ff 0%, var(--ios-blue) 100%);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 4px 12px -4px rgba(10, 132, 255, 0.45);
+}
+.contest-mode-active:hover { color: white; background: linear-gradient(180deg, #2da0ff 0%, #1690ff 100%); }
+
+/* ---------- Contest type badges ---------- */
+.contest-badge-ai      { background: rgba(168, 85, 247, 0.16); color: rgb(216, 180, 254); }
+.contest-badge-video   { background: rgba(244, 63, 94,  0.16); color: rgb(254, 205, 211); }
+.contest-badge-meme    { background: rgba(245, 158, 11, 0.16); color: rgb(253, 230, 138); }
+.contest-badge-art     { background: rgba(236, 72, 153, 0.16); color: rgb(251, 207, 232); }
+.contest-badge-general { background: rgba(148, 163, 184, 0.18); color: rgb(203, 213, 225); }
+
+/* Contest card entry animation (reuse same ease as variant entry) */
+.contest-card {
+  animation: contestIn 320ms var(--ease-ios) both;
+}
+@keyframes contestIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
