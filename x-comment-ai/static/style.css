@@ -36,12 +36,18 @@ body {
   main { padding-top: max(env(safe-area-inset-top), 24px); }
 }
 
-/* Apply tightest tracking only to display headings, not body, so 11–13px
-   chrome text stays readable. Sora is loaded via Google Fonts and used for
-   the hero title via .font-display; section headings stay on Inter for now
-   to keep visual rhythm calm. */
+/* All headings use Sora (geometric, bold) loaded via Google Fonts; body stays
+   Inter for clean small-text rendering. Tightest tracking only on display
+   sizes so 10–13px label headings stay readable. */
+h1, h2, h3, h4, h5, h6,
+.font-display {
+  font-family: 'Sora', 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+}
 h1, h2 { letter-spacing: -0.035em; }
-.font-display { font-family: 'Sora', 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; font-feature-settings: 'cv11', 'ss01'; }
+h3 { letter-spacing: -0.02em; }
+/* Tab labels also pick up Sora for visual rhythm with the panel headings. */
+.tab-pill { font-family: 'Sora', 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
 
 /* ---------- Glass material ---------- */
 .glass {
