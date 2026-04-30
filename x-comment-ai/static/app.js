@@ -878,6 +878,7 @@
         console.error(url, err);
         const msg = err.message || 'Failed';
         card.setStatus('error', msg);
+        card.streamFinish([]);  // tear down skeleton placeholders on terminal stream error
         addFailed(url, msg, card);
         errCount++;
       } finally {
