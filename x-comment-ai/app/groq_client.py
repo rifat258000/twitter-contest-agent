@@ -846,18 +846,25 @@ async def chat_stream(
             agen = _stream_gemini(key, model, full)
         else:
             agen = _stream_groq(key, model, full)
+        # Probe the first chunk inside a try/except that always closes the
+        # generator on failure — _stream_openrouter and _stream_gemini hold
+        # `async with httpx.AsyncClient(...)` contexts that won't release
+        # their TCP connections until the generator is awaited to completion
+        # or explicitly aclose()d.
         try:
             first_chunk = await agen.__anext__()
         except StopAsyncIteration:
-            # Empty stream — try the next provider.
+            await agen.aclose()
             last_err = GroqError(f"{name}: empty response")
             logger.warning(f"chat: {name} returned no tokens; falling back")
             continue
         except (RateLimitError, APIError, GroqError, httpx.HTTPError, asyncio.TimeoutError) as e:
+            await agen.aclose()
             last_err = e
             logger.warning(f"chat: {name} pre-stream error ({type(e).__name__}: {e}); falling back")
             continue
         except Exception as e:  # pragma: no cover — guard against SDK surprises
+            await agen.aclose()
             last_err = e
             logger.warning(f"chat: {name} unexpected pre-stream error ({type(e).__name__}: {e}); falling back")
             continue
