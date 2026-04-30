@@ -40,10 +40,10 @@ GROQ_OCR_MAX_TOKENS = int(os.getenv("GROQ_OCR_MAX_TOKENS", "2048"))
 # Groq → Groq #2 → Gemini → OpenRouter.
 GROQ_API_KEY_2 = os.getenv("GROQ_API_KEY_2", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
 OPENROUTER_MODEL = os.getenv(
-    "OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free"
+    "OPENROUTER_MODEL", "openai/gpt-oss-120b:free"
 ).strip()
 GROQ_CHAT_MODEL = os.getenv("GROQ_CHAT_MODEL", "").strip() or GROQ_MODEL
 GROQ_CHAT_MAX_TOKENS = int(os.getenv("GROQ_CHAT_MAX_TOKENS", "1024"))
